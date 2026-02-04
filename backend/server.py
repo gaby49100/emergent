@@ -986,7 +986,13 @@ async def pause_torrent(torrent_id: str, current_user: dict = Depends(get_curren
         raise HTTPException(status_code=404, detail="Torrent non trouvé")
     
     if torrent.get("hash"):
-        await qbit_request("POST", "/api/v2/torrents/pause", data={"hashes": torrent["hash"]})
+        try:
+            # qBittorrent API v2 - utiliser 'stop' au lieu de 'pause' pour les versions récentes
+            response = await qbit_request("POST", "/api/v2/torrents/stop", data={"hashes": torrent["hash"]})
+            logger.info(f"Pause torrent response: {response.status_code}")
+        except Exception as e:
+            logger.error(f"Erreur pause torrent: {e}")
+            raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
     
     return {"message": "Torrent mis en pause"}
 
@@ -1002,7 +1008,13 @@ async def resume_torrent(torrent_id: str, current_user: dict = Depends(get_curre
         raise HTTPException(status_code=404, detail="Torrent non trouvé")
     
     if torrent.get("hash"):
-        await qbit_request("POST", "/api/v2/torrents/resume", data={"hashes": torrent["hash"]})
+        try:
+            # qBittorrent API v2 - utiliser 'start' au lieu de 'resume' pour les versions récentes
+            response = await qbit_request("POST", "/api/v2/torrents/start", data={"hashes": torrent["hash"]})
+            logger.info(f"Resume torrent response: {response.status_code}")
+        except Exception as e:
+            logger.error(f"Erreur resume torrent: {e}")
+            raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
     
     return {"message": "Torrent repris"}
 
