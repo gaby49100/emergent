@@ -157,9 +157,12 @@ const MyTorrentsPage = () => {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
             toast.success('Fichier torrent ajouté avec succès');
+            // Reset form first, then close dialog
             setTorrentFile(null);
             setTorrentName('');
-            setAddDialogOpen(false);
+            setTimeout(() => {
+                setAddDialogOpen(false);
+            }, 100);
             fetchTorrents();
         } catch (error) {
             const message = error.response?.data?.detail || 'Erreur lors de l\'ajout';
