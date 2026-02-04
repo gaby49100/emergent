@@ -286,6 +286,39 @@ async def get_jackett_config():
         }
     return None
 
+async def get_download_config():
+    """Récupère la configuration de téléchargement"""
+    settings = await get_settings()
+    download = settings.get("download")
+    if download:
+        return download
+    return None
+
+def generate_signed_url(base_url: str, file_path: str, secret_key: str, expiry_hours: int = 1) -> tuple:
+    """Génère une URL signée avec expiration pour nginx secure_link"""
+    import time
+    import hashlib
+    import base64
+    from urllib.parse import quote
+    
+    # Timestamp d'expiration
+    expires = int(time.time()) + (expiry_hours * 3600)
+    
+    # Chemin encodé pour l'URL
+    encoded_path = quote(file_path, safe='/')
+    
+    # String à signer: expires + path + secret
+    string_to_sign = f"{expires}{encoded_path} {secret_key}"
+    
+    # MD5 hash en base64 URL-safe
+    md5_hash = hashlib.md5(string_to_sign.encode()).digest()
+    signature = base64.urlsafe_b64encode(md5_hash).decode().rstrip('=')
+    
+    # URL finale
+    url = f"{base_url}{encoded_path}?md5={signature}&expires={expires}"
+    
+    return url, datetime.fromtimestamp(expires, tz=timezone.utc).isoformat()
+
 # qBittorrent session management
 qbit_session_cookie = None
 
