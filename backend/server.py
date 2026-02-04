@@ -1,4 +1,4 @@
-# QBitMaster - Backend FastAPI
+# QBitMaster - Backend FastAPI avec Administration
 # Gestion de torrents multi-utilisateurs avec qBittorrent et Jackett
 
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File, Form
@@ -16,7 +16,6 @@ from datetime import datetime, timezone, timedelta
 import hashlib
 import jwt
 import httpx
-import base64
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -31,15 +30,6 @@ JWT_SECRET = os.environ.get('JWT_SECRET', 'qbitmaster-secret-key-change-in-produ
 JWT_ALGORITHM = 'HS256'
 JWT_EXPIRATION_HOURS = 24
 
-# qBittorrent Configuration
-QBIT_HOST = os.environ.get('QBIT_HOST', 'http://localhost:8080')
-QBIT_USERNAME = os.environ.get('QBIT_USERNAME', 'admin')
-QBIT_PASSWORD = os.environ.get('QBIT_PASSWORD', 'adminadmin')
-
-# Jackett Configuration
-JACKETT_URL = os.environ.get('JACKETT_URL', 'http://localhost:9117')
-JACKETT_API_KEY = os.environ.get('JACKETT_API_KEY', '')
-
 # Create the main app
 app = FastAPI(title="QBitMaster API", description="API de gestion de torrents multi-utilisateurs")
 
@@ -49,6 +39,7 @@ auth_router = APIRouter(prefix="/auth", tags=["Authentification"])
 torrent_router = APIRouter(prefix="/torrents", tags=["Torrents"])
 jackett_router = APIRouter(prefix="/jackett", tags=["Jackett"])
 notification_router = APIRouter(prefix="/notifications", tags=["Notifications"])
+admin_router = APIRouter(prefix="/admin", tags=["Administration"])
 
 security = HTTPBearer()
 
@@ -75,12 +66,71 @@ class UserResponse(BaseModel):
     id: str
     username: str
     email: str
+    role: str = "user"
+    group_id: Optional[str] = None
+    group_name: Optional[str] = None
     created_at: str
+
+class UserUpdate(BaseModel):
+    username: Optional[str] = None
+    email: Optional[EmailStr] = None
+    role: Optional[str] = None
+    group_id: Optional[str] = None
+    is_active: Optional[bool] = None
 
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
+
+# Group Models
+class GroupCreate(BaseModel):
+    name: str = Field(..., min_length=2, max_length=50)
+    description: Optional[str] = None
+    max_torrents: int = Field(default=100, ge=1)
+    max_download_speed: int = Field(default=0, ge=0)  # 0 = unlimited
+    max_upload_speed: int = Field(default=0, ge=0)  # 0 = unlimited
+    can_use_jackett: bool = True
+    can_see_all_torrents: bool = True
+
+class GroupResponse(BaseModel):
+    id: str
+    name: str
+    description: Optional[str]
+    max_torrents: int
+    max_download_speed: int
+    max_upload_speed: int
+    can_use_jackett: bool
+    can_see_all_torrents: bool
+    user_count: int = 0
+    created_at: str
+
+class GroupUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    max_torrents: Optional[int] = None
+    max_download_speed: Optional[int] = None
+    max_upload_speed: Optional[int] = None
+    can_use_jackett: Optional[bool] = None
+    can_see_all_torrents: Optional[bool] = None
+
+# Settings Models
+class QBitSettings(BaseModel):
+    host: str = Field(..., min_length=1)
+    port: int = Field(default=8080, ge=1, le=65535)
+    username: str
+    password: str
+    use_https: bool = False
+
+class JackettSettings(BaseModel):
+    url: str = Field(..., min_length=1)
+    api_key: str = Field(..., min_length=1)
+
+class SettingsResponse(BaseModel):
+    qbittorrent: Optional[dict] = None
+    jackett: Optional[dict] = None
+    qbittorrent_status: str = "not_configured"
+    jackett_status: str = "not_configured"
 
 # Torrent Models
 class TorrentCreate(BaseModel):
@@ -144,11 +194,12 @@ def verify_password(password: str, hashed: str) -> bool:
     """Vérifie un mot de passe hashé"""
     return hash_password(password) == hashed
 
-def create_token(user_id: str, username: str) -> str:
+def create_token(user_id: str, username: str, role: str) -> str:
     """Crée un token JWT"""
     payload = {
         "user_id": user_id,
         "username": username,
+        "role": role,
         "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS)
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
@@ -165,11 +216,52 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         if not user:
             raise HTTPException(status_code=401, detail="Utilisateur non trouvé")
         
+        # Get group info if user has a group
+        if user.get("group_id"):
+            group = await db.groups.find_one({"id": user["group_id"]}, {"_id": 0})
+            if group:
+                user["group_name"] = group.get("name")
+        
         return user
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expiré")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Token invalide")
+
+async def get_admin_user(current_user: dict = Depends(get_current_user)):
+    """Vérifie que l'utilisateur est admin"""
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Accès réservé aux administrateurs")
+    return current_user
+
+async def get_settings():
+    """Récupère les paramètres depuis la base de données"""
+    settings = await db.settings.find_one({"type": "app_settings"}, {"_id": 0})
+    return settings or {}
+
+async def get_qbit_config():
+    """Récupère la configuration qBittorrent"""
+    settings = await get_settings()
+    qbit = settings.get("qbittorrent")
+    if qbit:
+        protocol = "https" if qbit.get("use_https") else "http"
+        return {
+            "host": f"{protocol}://{qbit['host']}:{qbit['port']}",
+            "username": qbit["username"],
+            "password": qbit["password"]
+        }
+    return None
+
+async def get_jackett_config():
+    """Récupère la configuration Jackett"""
+    settings = await get_settings()
+    jackett = settings.get("jackett")
+    if jackett:
+        return {
+            "url": jackett["url"],
+            "api_key": jackett["api_key"]
+        }
+    return None
 
 # qBittorrent session management
 qbit_session_cookie = None
@@ -177,11 +269,17 @@ qbit_session_cookie = None
 async def qbit_login():
     """Connexion à qBittorrent et récupération du cookie de session"""
     global qbit_session_cookie
+    
+    config = await get_qbit_config()
+    if not config:
+        logger.warning("qBittorrent non configuré")
+        return False
+    
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{QBIT_HOST}/api/v2/auth/login",
-                data={"username": QBIT_USERNAME, "password": QBIT_PASSWORD}
+                f"{config['host']}/api/v2/auth/login",
+                data={"username": config['username'], "password": config['password']}
             )
             if response.status_code == 200 and response.text == "Ok.":
                 qbit_session_cookie = response.cookies.get("SID")
@@ -198,6 +296,10 @@ async def qbit_request(method: str, endpoint: str, **kwargs):
     """Effectue une requête à l'API qBittorrent"""
     global qbit_session_cookie
     
+    config = await get_qbit_config()
+    if not config:
+        raise HTTPException(status_code=503, detail="qBittorrent non configuré. Configurez-le dans Administration > Paramètres.")
+    
     if not qbit_session_cookie:
         await qbit_login()
     
@@ -206,18 +308,18 @@ async def qbit_request(method: str, endpoint: str, **kwargs):
             cookies = {"SID": qbit_session_cookie} if qbit_session_cookie else {}
             
             if method.upper() == "GET":
-                response = await client.get(f"{QBIT_HOST}{endpoint}", cookies=cookies, **kwargs)
+                response = await client.get(f"{config['host']}{endpoint}", cookies=cookies, **kwargs)
             else:
-                response = await client.post(f"{QBIT_HOST}{endpoint}", cookies=cookies, **kwargs)
+                response = await client.post(f"{config['host']}{endpoint}", cookies=cookies, **kwargs)
             
             # Si non autorisé, reconnexion et retry
             if response.status_code == 403:
                 await qbit_login()
                 cookies = {"SID": qbit_session_cookie} if qbit_session_cookie else {}
                 if method.upper() == "GET":
-                    response = await client.get(f"{QBIT_HOST}{endpoint}", cookies=cookies, **kwargs)
+                    response = await client.get(f"{config['host']}{endpoint}", cookies=cookies, **kwargs)
                 else:
-                    response = await client.post(f"{QBIT_HOST}{endpoint}", cookies=cookies, **kwargs)
+                    response = await client.post(f"{config['host']}{endpoint}", cookies=cookies, **kwargs)
             
             return response
     except Exception as e:
@@ -239,6 +341,14 @@ async def register(user_data: UserCreate):
     if existing_username:
         raise HTTPException(status_code=400, detail="Ce nom d'utilisateur est déjà pris")
     
+    # Vérifier si c'est le premier utilisateur (sera admin)
+    user_count = await db.users.count_documents({})
+    role = "admin" if user_count == 0 else "user"
+    
+    # Trouver le groupe par défaut
+    default_group = await db.groups.find_one({"name": "Défaut"})
+    group_id = default_group["id"] if default_group else None
+    
     # Créer l'utilisateur
     user_id = str(uuid.uuid4())
     user = {
@@ -246,13 +356,16 @@ async def register(user_data: UserCreate):
         "username": user_data.username,
         "email": user_data.email,
         "password_hash": hash_password(user_data.password),
+        "role": role,
+        "group_id": group_id,
+        "is_active": True,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     
     await db.users.insert_one(user)
     
     # Créer le token
-    token = create_token(user_id, user_data.username)
+    token = create_token(user_id, user_data.username, role)
     
     return TokenResponse(
         access_token=token,
@@ -260,6 +373,8 @@ async def register(user_data: UserCreate):
             id=user_id,
             username=user_data.username,
             email=user_data.email,
+            role=role,
+            group_id=group_id,
             created_at=user["created_at"]
         )
     )
@@ -272,7 +387,17 @@ async def login(credentials: UserLogin):
     if not user or not verify_password(credentials.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
     
-    token = create_token(user["id"], user["username"])
+    if not user.get("is_active", True):
+        raise HTTPException(status_code=403, detail="Compte désactivé. Contactez un administrateur.")
+    
+    # Get group name
+    group_name = None
+    if user.get("group_id"):
+        group = await db.groups.find_one({"id": user["group_id"]}, {"_id": 0})
+        if group:
+            group_name = group.get("name")
+    
+    token = create_token(user["id"], user["username"], user.get("role", "user"))
     
     return TokenResponse(
         access_token=token,
@@ -280,6 +405,9 @@ async def login(credentials: UserLogin):
             id=user["id"],
             username=user["username"],
             email=user["email"],
+            role=user.get("role", "user"),
+            group_id=user.get("group_id"),
+            group_name=group_name,
             created_at=user["created_at"]
         )
     )
@@ -289,6 +417,297 @@ async def get_me(current_user: dict = Depends(get_current_user)):
     """Récupère les informations de l'utilisateur connecté"""
     return UserResponse(**current_user)
 
+# ==================== ADMIN ROUTES ====================
+
+# Settings management
+@admin_router.get("/settings", response_model=SettingsResponse)
+async def get_admin_settings(admin: dict = Depends(get_admin_user)):
+    """Récupère les paramètres de l'application"""
+    settings = await get_settings()
+    
+    qbit_config = settings.get("qbittorrent")
+    jackett_config = settings.get("jackett")
+    
+    response = SettingsResponse(
+        qbittorrent={
+            "host": qbit_config.get("host", "") if qbit_config else "",
+            "port": qbit_config.get("port", 8080) if qbit_config else 8080,
+            "username": qbit_config.get("username", "") if qbit_config else "",
+            "use_https": qbit_config.get("use_https", False) if qbit_config else False
+        } if qbit_config else None,
+        jackett={
+            "url": jackett_config.get("url", "") if jackett_config else ""
+        } if jackett_config else None,
+        qbittorrent_status="configured" if qbit_config else "not_configured",
+        jackett_status="configured" if jackett_config else "not_configured"
+    )
+    
+    return response
+
+@admin_router.post("/settings/qbittorrent")
+async def save_qbit_settings(settings: QBitSettings, admin: dict = Depends(get_admin_user)):
+    """Sauvegarde les paramètres qBittorrent"""
+    global qbit_session_cookie
+    
+    await db.settings.update_one(
+        {"type": "app_settings"},
+        {"$set": {
+            "qbittorrent": {
+                "host": settings.host,
+                "port": settings.port,
+                "username": settings.username,
+                "password": settings.password,
+                "use_https": settings.use_https
+            }
+        }},
+        upsert=True
+    )
+    
+    # Reset session cookie to force reconnection
+    qbit_session_cookie = None
+    
+    # Test connection
+    try:
+        success = await qbit_login()
+        if success:
+            return {"message": "Paramètres qBittorrent sauvegardés et connexion réussie", "status": "connected"}
+        else:
+            return {"message": "Paramètres sauvegardés mais échec de connexion", "status": "error"}
+    except Exception as e:
+        return {"message": f"Paramètres sauvegardés mais erreur: {str(e)}", "status": "error"}
+
+@admin_router.post("/settings/jackett")
+async def save_jackett_settings(settings: JackettSettings, admin: dict = Depends(get_admin_user)):
+    """Sauvegarde les paramètres Jackett"""
+    await db.settings.update_one(
+        {"type": "app_settings"},
+        {"$set": {
+            "jackett": {
+                "url": settings.url,
+                "api_key": settings.api_key
+            }
+        }},
+        upsert=True
+    )
+    
+    # Test connection
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                f"{settings.url}/api/v2.0/server/config",
+                params={"apikey": settings.api_key}
+            )
+            if response.status_code == 200:
+                return {"message": "Paramètres Jackett sauvegardés et connexion réussie", "status": "connected"}
+            else:
+                return {"message": "Paramètres sauvegardés mais échec de connexion", "status": "error"}
+    except Exception as e:
+        return {"message": f"Paramètres sauvegardés mais erreur: {str(e)}", "status": "error"}
+
+@admin_router.post("/settings/test-qbittorrent")
+async def test_qbit_connection(admin: dict = Depends(get_admin_user)):
+    """Teste la connexion à qBittorrent"""
+    try:
+        response = await qbit_request("GET", "/api/v2/app/version")
+        if response.status_code == 200:
+            return {"status": "connected", "version": response.text}
+        return {"status": "error", "message": "Échec de connexion"}
+    except HTTPException as e:
+        return {"status": "error", "message": e.detail}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@admin_router.post("/settings/test-jackett")
+async def test_jackett_connection(admin: dict = Depends(get_admin_user)):
+    """Teste la connexion à Jackett"""
+    config = await get_jackett_config()
+    if not config:
+        return {"status": "error", "message": "Jackett non configuré"}
+    
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                f"{config['url']}/api/v2.0/server/config",
+                params={"apikey": config['api_key']}
+            )
+            if response.status_code == 200:
+                return {"status": "connected"}
+            return {"status": "error", "message": "Échec de connexion"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+# User management
+@admin_router.get("/users", response_model=List[UserResponse])
+async def get_users(admin: dict = Depends(get_admin_user)):
+    """Récupère la liste des utilisateurs"""
+    users = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(1000)
+    
+    # Add group names
+    for user in users:
+        if user.get("group_id"):
+            group = await db.groups.find_one({"id": user["group_id"]}, {"_id": 0})
+            if group:
+                user["group_name"] = group.get("name")
+    
+    return users
+
+@admin_router.get("/users/{user_id}", response_model=UserResponse)
+async def get_user(user_id: str, admin: dict = Depends(get_admin_user)):
+    """Récupère un utilisateur par ID"""
+    user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+    
+    if user.get("group_id"):
+        group = await db.groups.find_one({"id": user["group_id"]}, {"_id": 0})
+        if group:
+            user["group_name"] = group.get("name")
+    
+    return user
+
+@admin_router.put("/users/{user_id}")
+async def update_user(user_id: str, user_update: UserUpdate, admin: dict = Depends(get_admin_user)):
+    """Met à jour un utilisateur"""
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+    
+    update_data = {k: v for k, v in user_update.model_dump().items() if v is not None}
+    
+    if update_data:
+        await db.users.update_one({"id": user_id}, {"$set": update_data})
+    
+    return {"message": "Utilisateur mis à jour avec succès"}
+
+@admin_router.delete("/users/{user_id}")
+async def delete_user(user_id: str, admin: dict = Depends(get_admin_user)):
+    """Supprime un utilisateur"""
+    if user_id == admin["id"]:
+        raise HTTPException(status_code=400, detail="Vous ne pouvez pas supprimer votre propre compte")
+    
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+    
+    await db.users.delete_one({"id": user_id})
+    # Also delete user's torrents
+    await db.torrents.delete_many({"user_id": user_id})
+    await db.notifications.delete_many({"user_id": user_id})
+    
+    return {"message": "Utilisateur supprimé avec succès"}
+
+@admin_router.post("/users/{user_id}/reset-password")
+async def reset_user_password(user_id: str, admin: dict = Depends(get_admin_user)):
+    """Réinitialise le mot de passe d'un utilisateur"""
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+    
+    # Generate temporary password
+    temp_password = str(uuid.uuid4())[:12]
+    
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"password_hash": hash_password(temp_password)}}
+    )
+    
+    return {"message": "Mot de passe réinitialisé", "temporary_password": temp_password}
+
+# Group management
+@admin_router.get("/groups", response_model=List[GroupResponse])
+async def get_groups(admin: dict = Depends(get_admin_user)):
+    """Récupère la liste des groupes"""
+    groups = await db.groups.find({}, {"_id": 0}).to_list(100)
+    
+    # Add user count for each group
+    for group in groups:
+        user_count = await db.users.count_documents({"group_id": group["id"]})
+        group["user_count"] = user_count
+    
+    return groups
+
+@admin_router.post("/groups", response_model=GroupResponse)
+async def create_group(group_data: GroupCreate, admin: dict = Depends(get_admin_user)):
+    """Crée un nouveau groupe"""
+    existing = await db.groups.find_one({"name": group_data.name})
+    if existing:
+        raise HTTPException(status_code=400, detail="Un groupe avec ce nom existe déjà")
+    
+    group_id = str(uuid.uuid4())
+    group = {
+        "id": group_id,
+        "name": group_data.name,
+        "description": group_data.description,
+        "max_torrents": group_data.max_torrents,
+        "max_download_speed": group_data.max_download_speed,
+        "max_upload_speed": group_data.max_upload_speed,
+        "can_use_jackett": group_data.can_use_jackett,
+        "can_see_all_torrents": group_data.can_see_all_torrents,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.groups.insert_one(group)
+    
+    return GroupResponse(**group, user_count=0)
+
+@admin_router.put("/groups/{group_id}")
+async def update_group(group_id: str, group_update: GroupUpdate, admin: dict = Depends(get_admin_user)):
+    """Met à jour un groupe"""
+    group = await db.groups.find_one({"id": group_id})
+    if not group:
+        raise HTTPException(status_code=404, detail="Groupe non trouvé")
+    
+    update_data = {k: v for k, v in group_update.model_dump().items() if v is not None}
+    
+    if update_data:
+        await db.groups.update_one({"id": group_id}, {"$set": update_data})
+    
+    return {"message": "Groupe mis à jour avec succès"}
+
+@admin_router.delete("/groups/{group_id}")
+async def delete_group(group_id: str, admin: dict = Depends(get_admin_user)):
+    """Supprime un groupe"""
+    group = await db.groups.find_one({"id": group_id})
+    if not group:
+        raise HTTPException(status_code=404, detail="Groupe non trouvé")
+    
+    # Check if default group
+    if group.get("name") == "Défaut":
+        raise HTTPException(status_code=400, detail="Le groupe par défaut ne peut pas être supprimé")
+    
+    # Move users to default group
+    default_group = await db.groups.find_one({"name": "Défaut"})
+    if default_group:
+        await db.users.update_many(
+            {"group_id": group_id},
+            {"$set": {"group_id": default_group["id"]}}
+        )
+    else:
+        await db.users.update_many(
+            {"group_id": group_id},
+            {"$set": {"group_id": None}}
+        )
+    
+    await db.groups.delete_one({"id": group_id})
+    
+    return {"message": "Groupe supprimé avec succès"}
+
+# Admin stats
+@admin_router.get("/stats")
+async def get_admin_stats(admin: dict = Depends(get_admin_user)):
+    """Récupère les statistiques globales pour l'admin"""
+    user_count = await db.users.count_documents({})
+    group_count = await db.groups.count_documents({})
+    torrent_count = await db.torrents.count_documents({})
+    active_users = await db.users.count_documents({"is_active": True})
+    
+    return {
+        "total_users": user_count,
+        "active_users": active_users,
+        "total_groups": group_count,
+        "total_torrents": torrent_count
+    }
+
 # ==================== TORRENT ROUTES ====================
 
 @torrent_router.post("/add", response_model=dict)
@@ -297,6 +716,14 @@ async def add_torrent(
     current_user: dict = Depends(get_current_user)
 ):
     """Ajoute un torrent via lien magnet"""
+    # Check group limits
+    if current_user.get("group_id"):
+        group = await db.groups.find_one({"id": current_user["group_id"]})
+        if group:
+            user_torrent_count = await db.torrents.count_documents({"user_id": current_user["id"]})
+            if user_torrent_count >= group.get("max_torrents", 100):
+                raise HTTPException(status_code=403, detail=f"Limite de {group['max_torrents']} torrents atteinte pour votre groupe")
+    
     try:
         # Ajouter à qBittorrent
         response = await qbit_request(
@@ -346,6 +773,14 @@ async def add_torrent_file(
     current_user: dict = Depends(get_current_user)
 ):
     """Ajoute un torrent via fichier .torrent"""
+    # Check group limits
+    if current_user.get("group_id"):
+        group = await db.groups.find_one({"id": current_user["group_id"]})
+        if group:
+            user_torrent_count = await db.torrents.count_documents({"user_id": current_user["id"]})
+            if user_torrent_count >= group.get("max_torrents", 100):
+                raise HTTPException(status_code=403, detail=f"Limite de {group['max_torrents']} torrents atteinte pour votre groupe")
+    
     try:
         content = await file.read()
         
@@ -433,6 +868,12 @@ async def get_my_torrents(current_user: dict = Depends(get_current_user)):
 @torrent_router.get("/all", response_model=List[TorrentResponse])
 async def get_all_torrents(current_user: dict = Depends(get_current_user)):
     """Récupère tous les torrents de tous les utilisateurs"""
+    # Check group permission
+    if current_user.get("group_id"):
+        group = await db.groups.find_one({"id": current_user["group_id"]})
+        if group and not group.get("can_see_all_torrents", True):
+            raise HTTPException(status_code=403, detail="Votre groupe n'a pas accès à cette fonctionnalité")
+    
     torrents = await db.torrents.find({}, {"_id": 0}).to_list(1000)
     
     # Récupérer les infos de progression depuis qBittorrent
@@ -571,12 +1012,19 @@ async def search_jackett(
     current_user: dict = Depends(get_current_user)
 ):
     """Recherche des torrents via Jackett"""
-    if not JACKETT_API_KEY:
-        raise HTTPException(status_code=503, detail="Jackett non configuré (API key manquante)")
+    # Check group permission
+    if current_user.get("group_id"):
+        group = await db.groups.find_one({"id": current_user["group_id"]})
+        if group and not group.get("can_use_jackett", True):
+            raise HTTPException(status_code=403, detail="Votre groupe n'a pas accès à la recherche Jackett")
+    
+    config = await get_jackett_config()
+    if not config:
+        raise HTTPException(status_code=503, detail="Jackett non configuré. Contactez un administrateur.")
     
     try:
         params = {
-            "apikey": JACKETT_API_KEY,
+            "apikey": config["api_key"],
             "Query": query
         }
         if category:
@@ -584,7 +1032,7 @@ async def search_jackett(
         
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.get(
-                f"{JACKETT_URL}/api/v2.0/indexers/all/results",
+                f"{config['url']}/api/v2.0/indexers/all/results",
                 params=params
             )
             
@@ -594,10 +1042,9 @@ async def search_jackett(
             data = response.json()
             results = []
             
-            for item in data.get("Results", [])[:50]:  # Limiter à 50 résultats
+            for item in data.get("Results", [])[:50]:
                 magnet = item.get("MagnetUri", "")
                 if not magnet and item.get("Link"):
-                    # Utiliser le lien de téléchargement si pas de magnet
                     magnet = item.get("Link", "")
                 
                 results.append(JackettSearchResult(
@@ -621,14 +1068,15 @@ async def search_jackett(
 @jackett_router.get("/indexers")
 async def get_indexers(current_user: dict = Depends(get_current_user)):
     """Récupère la liste des indexeurs Jackett configurés"""
-    if not JACKETT_API_KEY:
+    config = await get_jackett_config()
+    if not config:
         raise HTTPException(status_code=503, detail="Jackett non configuré")
     
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(
-                f"{JACKETT_URL}/api/v2.0/indexers",
-                params={"apikey": JACKETT_API_KEY}
+                f"{config['url']}/api/v2.0/indexers",
+                params={"apikey": config['api_key']}
             )
             
             if response.status_code != 200:
@@ -727,22 +1175,27 @@ async def health_check():
         status["database"] = "error"
     
     # Check qBittorrent
-    try:
-        response = await qbit_request("GET", "/api/v2/app/version")
-        if response.status_code == 200:
-            status["qbittorrent"] = "ok"
-        else:
+    config = await get_qbit_config()
+    if config:
+        try:
+            response = await qbit_request("GET", "/api/v2/app/version")
+            if response.status_code == 200:
+                status["qbittorrent"] = "ok"
+            else:
+                status["qbittorrent"] = "error"
+        except Exception:
             status["qbittorrent"] = "error"
-    except Exception:
-        status["qbittorrent"] = "error"
+    else:
+        status["qbittorrent"] = "not_configured"
     
     # Check Jackett
-    if JACKETT_API_KEY:
+    jackett_config = await get_jackett_config()
+    if jackett_config:
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.get(
-                    f"{JACKETT_URL}/api/v2.0/server/config",
-                    params={"apikey": JACKETT_API_KEY}
+                    f"{jackett_config['url']}/api/v2.0/server/config",
+                    params={"apikey": jackett_config['api_key']}
                 )
                 if response.status_code == 200:
                     status["jackett"] = "ok"
@@ -761,6 +1214,7 @@ api_router.include_router(auth_router)
 api_router.include_router(torrent_router)
 api_router.include_router(jackett_router)
 api_router.include_router(notification_router)
+api_router.include_router(admin_router)
 app.include_router(api_router)
 
 # ==================== MIDDLEWARE ====================
@@ -785,6 +1239,23 @@ async def startup():
     await db.torrents.create_index("user_id")
     await db.torrents.create_index("hash")
     await db.notifications.create_index("user_id")
+    await db.groups.create_index("name", unique=True)
+    
+    # Créer le groupe par défaut s'il n'existe pas
+    default_group = await db.groups.find_one({"name": "Défaut"})
+    if not default_group:
+        await db.groups.insert_one({
+            "id": str(uuid.uuid4()),
+            "name": "Défaut",
+            "description": "Groupe par défaut pour les nouveaux utilisateurs",
+            "max_torrents": 100,
+            "max_download_speed": 0,
+            "max_upload_speed": 0,
+            "can_use_jackett": True,
+            "can_see_all_torrents": True,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+        logger.info("Groupe par défaut créé")
     
     # Tenter connexion qBittorrent
     await qbit_login()
