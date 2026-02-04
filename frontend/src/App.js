@@ -1,54 +1,116 @@
-import { useEffect } from "react";
-import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
+// App.js - Application principale avec routing
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { Toaster } from './components/ui/sonner';
+import Layout from './components/Layout';
+import LoginPage from './pages/LoginPage';
+import DashboardPage from './pages/DashboardPage';
+import MyTorrentsPage from './pages/MyTorrentsPage';
+import AllTorrentsPage from './pages/AllTorrentsPage';
+import JackettSearchPage from './pages/JackettSearchPage';
+import './App.css';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+// Route protégée - redirige vers login si non authentifié
+const ProtectedRoute = ({ children }) => {
+    const { isAuthenticated, loading } = useAuth();
 
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-background flex items-center justify-center">
+                <div className="w-8 h-8 spinner" />
+            </div>
+        );
     }
-  };
 
-  useEffect(() => {
-    helloWorldApi();
-  }, []);
+    if (!isAuthenticated) {
+        return <Navigate to="/login" replace />;
+    }
 
-  return (
-    <div>
-      <header className="App-header">
-        <a
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
-  );
+    return <Layout>{children}</Layout>;
 };
 
-function App() {
-  return (
-    <div className="App">
-      <BrowserRouter>
+// Route publique - redirige vers dashboard si déjà authentifié
+const PublicRoute = ({ children }) => {
+    const { isAuthenticated, loading } = useAuth();
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-background flex items-center justify-center">
+                <div className="w-8 h-8 spinner" />
+            </div>
+        );
+    }
+
+    if (isAuthenticated) {
+        return <Navigate to="/dashboard" replace />;
+    }
+
+    return children;
+};
+
+function AppRoutes() {
+    return (
         <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
+            {/* Routes publiques */}
+            <Route
+                path="/login"
+                element={
+                    <PublicRoute>
+                        <LoginPage />
+                    </PublicRoute>
+                }
+            />
+
+            {/* Routes protégées */}
+            <Route
+                path="/dashboard"
+                element={
+                    <ProtectedRoute>
+                        <DashboardPage />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/my-torrents"
+                element={
+                    <ProtectedRoute>
+                        <MyTorrentsPage />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/all-torrents"
+                element={
+                    <ProtectedRoute>
+                        <AllTorrentsPage />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/search"
+                element={
+                    <ProtectedRoute>
+                        <JackettSearchPage />
+                    </ProtectedRoute>
+                }
+            />
+
+            {/* Redirection par défaut */}
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
-      </BrowserRouter>
-    </div>
-  );
+    );
+}
+
+function App() {
+    return (
+        <BrowserRouter>
+            <AuthProvider>
+                <AppRoutes />
+                <Toaster position="top-right" richColors />
+            </AuthProvider>
+        </BrowserRouter>
+    );
 }
 
 export default App;
