@@ -106,7 +106,8 @@ const MyTorrentsPage = () => {
 
     useEffect(() => {
         fetchTorrents();
-        const interval = setInterval(fetchTorrents, 3000);
+        // Polling toutes les 5 secondes
+        const interval = setInterval(fetchTorrents, 5000);
         return () => clearInterval(interval);
     }, [fetchTorrents]);
 
