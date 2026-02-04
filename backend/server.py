@@ -1086,7 +1086,7 @@ async def get_indexers(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=503, detail="Jackett non configuré")
     
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
             response = await client.get(
                 f"{config['url']}/api/v2.0/indexers",
                 params={"apikey": config['api_key']}
