@@ -1,34 +1,157 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+/* QBitMaster - Custom Styles */
+
+/* Layout */
+.sidebar {
+    @apply fixed left-0 top-0 h-screen w-64 bg-card/50 backdrop-blur-xl border-r border-border z-40;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
+.main-content {
+    @apply ml-64 min-h-screen p-6;
+}
+
+/* Mobile sidebar */
+@media (max-width: 1024px) {
+    .sidebar {
+        @apply -translate-x-full transition-transform duration-300;
+    }
+    
+    .sidebar.open {
+        @apply translate-x-0;
+    }
+    
+    .main-content {
+        @apply ml-0;
     }
 }
 
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
+/* Table styles */
+.torrent-table {
+    @apply w-full text-sm;
 }
 
-.App-link {
-    color: #61dafb;
+.torrent-table th {
+    @apply text-left font-medium text-muted-foreground py-3 px-4 border-b border-border bg-card/50 sticky top-0;
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+.torrent-table td {
+    @apply py-3 px-4 border-b border-border;
+}
+
+.torrent-table tr {
+    @apply transition-colors duration-200;
+}
+
+.torrent-table tr:hover {
+    @apply bg-secondary/50;
+}
+
+/* Progress bar colors */
+.progress-downloading {
+    @apply bg-primary;
+}
+
+.progress-seeding {
+    @apply bg-[hsl(var(--success))];
+}
+
+.progress-paused {
+    @apply bg-muted-foreground;
+}
+
+.progress-error {
+    @apply bg-destructive;
+}
+
+/* Status badges */
+.status-badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-medium;
+}
+
+.status-downloading {
+    @apply bg-primary/20 text-primary;
+}
+
+.status-seeding {
+    @apply bg-[hsl(var(--success))]/20 text-[hsl(var(--success))];
+}
+
+.status-completed {
+    @apply bg-[hsl(var(--success))]/20 text-[hsl(var(--success))];
+}
+
+.status-paused {
+    @apply bg-muted text-muted-foreground;
+}
+
+.status-error {
+    @apply bg-destructive/20 text-destructive;
+}
+
+/* Card hover effect */
+.stat-card {
+    @apply transition-all duration-200;
+}
+
+.stat-card:hover {
+    @apply border-primary/50 shadow-lg shadow-primary/5;
+}
+
+/* Button animations */
+.btn-action {
+    @apply transition-transform duration-100 active:scale-95;
+}
+
+/* Navigation link active state */
+.nav-link {
+    @apply flex items-center gap-3 px-3 py-2 rounded-md text-muted-foreground transition-colors duration-200;
+}
+
+.nav-link:hover {
+    @apply bg-secondary text-foreground;
+}
+
+.nav-link.active {
+    @apply bg-primary/10 text-primary;
+}
+
+/* Search input */
+.search-input {
+    @apply bg-secondary/50 border-border focus:border-primary focus:ring-1 focus:ring-primary;
+}
+
+/* Modal backdrop */
+.modal-backdrop {
+    @apply fixed inset-0 bg-black/80 backdrop-blur-sm z-50;
+}
+
+/* Notification dot */
+.notification-dot {
+    @apply absolute -top-1 -right-1 w-2 h-2 bg-destructive rounded-full;
+}
+
+/* Loading spinner */
+.spinner {
+    @apply animate-spin rounded-full border-2 border-muted border-t-primary;
+}
+
+/* Empty state */
+.empty-state {
+    @apply flex flex-col items-center justify-center py-12 text-center;
+}
+
+.empty-state-icon {
+    @apply w-16 h-16 text-muted-foreground/50 mb-4;
+}
+
+/* Toast customization for sonner */
+[data-sonner-toast] {
+    @apply bg-card border-border text-foreground;
+}
+
+[data-sonner-toast][data-type="success"] {
+    @apply bg-[hsl(var(--success))]/10 border-[hsl(var(--success))]/30;
+}
+
+[data-sonner-toast][data-type="error"] {
+    @apply bg-destructive/10 border-destructive/30;
 }
