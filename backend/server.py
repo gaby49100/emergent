@@ -1053,7 +1053,7 @@ async def search_jackett(
             
             results = []
             
-            for item in data.get("Results", [])[:50]:
+            for item in data.get("Results", []):
                 magnet = item.get("MagnetUri", "")
                 if not magnet and item.get("Link"):
                     magnet = item.get("Link", "")
@@ -1067,6 +1067,12 @@ async def search_jackett(
                     tracker=item.get("Tracker", "Inconnu"),
                     published=item.get("PublishDate", "")
                 ))
+            
+            # Trier par nombre de seeders (décroissant)
+            results.sort(key=lambda x: x.seeders, reverse=True)
+            
+            # Limiter à 50 résultats après le tri
+            results = results[:50]
             
             return JackettSearchResponse(results=results, total=len(results))
     
