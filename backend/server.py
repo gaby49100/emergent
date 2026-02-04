@@ -519,15 +519,36 @@ async def save_jackett_settings(settings: JackettSettings, admin: dict = Depends
 @admin_router.post("/settings/test-qbittorrent")
 async def test_qbit_connection(admin: dict = Depends(get_admin_user)):
     """Teste la connexion à qBittorrent"""
+    config = await get_qbit_config()
+    if not config:
+        return {"status": "error", "message": "qBittorrent non configuré"}
+    
     try:
-        response = await qbit_request("GET", "/api/v2/app/version")
-        if response.status_code == 200:
-            return {"status": "connected", "version": response.text}
-        return {"status": "error", "message": "Échec de connexion"}
-    except HTTPException as e:
-        return {"status": "error", "message": e.detail}
+        # Test login first
+        async with httpx.AsyncClient(follow_redirects=True, verify=True, timeout=10.0) as client:
+            login_response = await client.post(
+                f"{config['host']}/api/v2/auth/login",
+                data={"username": config['username'], "password": config['password']}
+            )
+            
+            if login_response.status_code != 200 or login_response.text != "Ok.":
+                return {
+                    "status": "error", 
+                    "message": f"Échec authentification: {login_response.text}. Vérifiez le nom d'utilisateur et mot de passe."
+                }
+            
+            # Get version
+            sid = login_response.cookies.get("SID")
+            version_response = await client.get(
+                f"{config['host']}/api/v2/app/version",
+                cookies={"SID": sid} if sid else {}
+            )
+            
+            if version_response.status_code == 200:
+                return {"status": "connected", "version": version_response.text}
+            return {"status": "error", "message": f"Authentification OK mais erreur API: {version_response.status_code}"}
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": f"Erreur connexion: {str(e)}"}
 
 @admin_router.post("/settings/test-jackett")
 async def test_jackett_connection(admin: dict = Depends(get_admin_user)):
