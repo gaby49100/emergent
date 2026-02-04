@@ -1033,16 +1033,24 @@ async def search_jackett(
         if category:
             params["Category[]"] = category
         
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
             response = await client.get(
                 f"{config['url']}/api/v2.0/indexers/all/results",
                 params=params
             )
             
-            if response.status_code != 200:
-                raise HTTPException(status_code=response.status_code, detail="Erreur Jackett")
+            logger.info(f"Jackett search response: {response.status_code}")
             
-            data = response.json()
+            if response.status_code != 200:
+                logger.error(f"Jackett error: {response.text[:200]}")
+                raise HTTPException(status_code=response.status_code, detail=f"Erreur Jackett: {response.text[:100]}")
+            
+            try:
+                data = response.json()
+            except Exception as json_err:
+                logger.error(f"Jackett JSON parse error: {response.text[:200]}")
+                raise HTTPException(status_code=500, detail="Réponse Jackett invalide (pas du JSON)")
+            
             results = []
             
             for item in data.get("Results", [])[:50]:
@@ -1064,6 +1072,8 @@ async def search_jackett(
     
     except httpx.TimeoutException:
         raise HTTPException(status_code=504, detail="Timeout Jackett - la recherche a pris trop de temps")
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Erreur recherche Jackett: {e}")
         raise HTTPException(status_code=503, detail=f"Service Jackett indisponible: {str(e)}")
