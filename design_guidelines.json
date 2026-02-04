@@ -1,0 +1,150 @@
+{
+  "identity": {
+    "persona": "E1",
+    "style": "Tech Professional / Dark Mode / Precision",
+    "archetype": "Archetype 4: Swiss & High-Contrast (Adapted for Dark Tech)",
+    "principles": [
+      "Fusion over Imitation: Mix Swiss precision with Cyberpunk depth.",
+      "Content is King: Data (speed, progress) is the hero.",
+      "Density: High information density for power users.",
+      "Contrast: High contrast for readability in dark mode."
+    ]
+  },
+  "typography": {
+    "headings": {
+      "font_family": "Chivo, sans-serif",
+      "weights": ["700", "900"],
+      "usage": "Page titles, Section headers, Modal titles",
+      "letter_spacing": "tracking-tight"
+    },
+    "body": {
+      "font_family": "IBM Plex Sans, sans-serif",
+      "weights": ["400", "500"],
+      "usage": "General text, labels, descriptions"
+    },
+    "mono": {
+      "font_family": "JetBrains Mono, monospace",
+      "weights": ["400"],
+      "usage": "File sizes, Download speeds, Hash strings, Time remaining"
+    },
+    "installation": "Import fonts via Google Fonts in index.css: @import url('https://fonts.googleapis.com/css2?family=Chivo:wght@400;700;900&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap');"
+  },
+  "colors": {
+    "theme": "dark",
+    "palette": {
+      "background": "#09090B",
+      "foreground": "#FAFAFA",
+      "card": "#18181B",
+      "card_foreground": "#FAFAFA",
+      "popover": "#18181B",
+      "popover_foreground": "#FAFAFA",
+      "primary": "#6366F1",
+      "primary_foreground": "#FFFFFF",
+      "secondary": "#27272A",
+      "secondary_foreground": "#FAFAFA",
+      "muted": "#27272A",
+      "muted_foreground": "#A1A1AA",
+      "accent": "#27272A",
+      "accent_foreground": "#FAFAFA",
+      "destructive": "#EF4444",
+      "destructive_foreground": "#FFFFFF",
+      "border": "#27272A",
+      "input": "#27272A",
+      "ring": "#6366F1",
+      "success": "#10B981",
+      "warning": "#F59E0B"
+    },
+    "gradients": {
+      "primary_glow": "linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)",
+      "subtle_overlay": "linear-gradient(to bottom, rgba(255,255,255,0.03), rgba(255,255,255,0))"
+    }
+  },
+  "layout": {
+    "spacing_scale": "Generous (p-6, p-8) for containers, Dense (p-2, p-3) for data tables.",
+    "grid_system": "Bento Grid for Dashboard Overview. 12-column grid base.",
+    "sidebar": {
+      "width": "w-64",
+      "behavior": "Collapsible on mobile, fixed on desktop.",
+      "style": "Border-r border-border bg-card/50 backdrop-blur-xl"
+    },
+    "container": {
+      "max_width": "max-w-7xl",
+      "padding": "px-4 sm:px-6 lg:px-8",
+      "center": true
+    }
+  },
+  "components": {
+    "radius": "0.3rem",
+    "buttons": {
+      "style": "Sharp or slightly rounded (rounded-md). High contrast hover states.",
+      "animation": "active:scale-95 transition-transform duration-100"
+    },
+    "cards": {
+      "style": "Flat background (bg-card) with 1px border (border-border). No heavy shadows.",
+      "hover": "hover:border-primary/50 transition-colors duration-200"
+    },
+    "tables": {
+      "style": "Dense, row-hover effects, sticky header.",
+      "typography": "text-sm for data, font-mono for metrics."
+    },
+    "progress_bars": {
+      "style": "Slim (h-2), rounded-full.",
+      "colors": {
+        "downloading": "bg-primary",
+        "seeding": "bg-success",
+        "paused": "bg-muted-foreground",
+        "error": "bg-destructive"
+      }
+    },
+    "modals": {
+      "backdrop": "bg-black/80 backdrop-blur-sm",
+      "animation": "fade-in zoom-in-95"
+    }
+  },
+  "visual_enhancers": {
+    "glassmorphism": "Use backdrop-blur-md for sticky headers and sidebar.",
+    "borders": "1px solid borders are preferred over shadows for depth in dark mode.",
+    "micro_interactions": "Hover on table rows highlights the row. Buttons have click feedback."
+  },
+  "icons": {
+    "library": "lucide-react",
+    "style": "Stroke width 1.5px or 2px. Consistent sizing (w-4 h-4 for dense UI, w-5 h-5 for nav).",
+    "usage": "Use icons to reinforce actions (Download, Pause, Delete, Search)."
+  },
+  "localization": {
+    "language": "fr",
+    "key_terms": {
+      "dashboard": "Tableau de bord",
+      "my_torrents": "Mes torrents",
+      "all_torrents": "Tous les torrents",
+      "search": "Recherche",
+      "settings": "Paramètres",
+      "add_torrent": "Ajouter un torrent",
+      "download": "Télécharger",
+      "pause": "Pause",
+      "resume": "Reprendre",
+      "delete": "Supprimer",
+      "status": "État",
+      "size": "Taille",
+      "progress": "Progression",
+      "speed": "Vitesse",
+      "eta": "Temps restant"
+    }
+  },
+  "universal_guidelines": [
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use glass-morphism effects with backdrop filters (12-24px blur).",
+    "You MUST NOT apply universal transition. Eg: transition: all. This results in breaking transforms. Always add transitions for specific interactive elements like button, input excluding transforms.",
+    "You MUST NOT center align the app container, ie do not add .App { text-align: center; } in the css file. This disrupts the human natural reading flow of text.",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style.",
+    "NEVER: use AI assistant Emoji characters like 🤖🧠 etc for icons.",
+    "Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations. Static = dead.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations: separates good from extraordinary.",
+    "All interactive and key informational elements MUST include a data-testid attribute to facilitate robust automated testing.",
+    "Use sonner for toasts."
+  ],
+  "instructions_to_main_agent": "Implement the design using the provided palette and typography. Focus on the 'My Torrents' table being the centerpiece - it must be highly functional, dense, and readable. Use the 'Bento' grid for the Dashboard stats (Download Speed, Upload Speed, Active Torrents). Ensure all text is in French."
+}
