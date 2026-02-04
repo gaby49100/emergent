@@ -983,16 +983,20 @@ async def delete_torrent(torrent_id: str, current_user: dict = Depends(get_curre
     if not torrent:
         raise HTTPException(status_code=404, detail="Torrent non trouvé")
     
-    # Supprimer de qBittorrent
+    # Supprimer de qBittorrent avec les fichiers
     if torrent.get("hash"):
         try:
-            await qbit_request(
+            logger.info(f"Suppression torrent qBittorrent: hash={torrent['hash']}")
+            response = await qbit_request(
                 "POST",
                 "/api/v2/torrents/delete",
-                data={"hashes": torrent["hash"], "deleteFiles": "true"}
+                data={"hashes": torrent["hash"], "deleteFiles": True}
             )
+            logger.info(f"Suppression qBittorrent response: {response.status_code} - {response.text}")
         except Exception as e:
             logger.warning(f"Erreur suppression qBittorrent: {e}")
+    else:
+        logger.warning(f"Torrent sans hash, impossible de supprimer de qBittorrent: {torrent.get('name')}")
     
     # Supprimer de la base de données
     await db.torrents.delete_one({"id": torrent_id})
