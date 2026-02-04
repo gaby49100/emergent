@@ -572,6 +572,75 @@ async def save_jackett_settings(settings: JackettSettings, admin: dict = Depends
     except Exception as e:
         return {"message": f"Paramètres sauvegardés mais erreur: {str(e)}", "status": "error"}
 
+@admin_router.post("/settings/download")
+async def save_download_settings(settings: DownloadSettings, admin: dict = Depends(get_admin_user)):
+    """Sauvegarde les paramètres de téléchargement (URLs signées)"""
+    # Nettoyer l'URL de base
+    base_url = settings.base_url.rstrip('/')
+    
+    await db.settings.update_one(
+        {"type": "app_settings"},
+        {"$set": {
+            "download": {
+                "base_url": base_url,
+                "secret_key": settings.secret_key,
+                "download_path": settings.download_path,
+                "link_expiry_hours": settings.link_expiry_hours
+            }
+        }},
+        upsert=True
+    )
+    
+    return {"message": "Paramètres de téléchargement sauvegardés", "status": "ok"}
+
+@admin_router.get("/settings/download")
+async def get_download_settings(admin: dict = Depends(get_admin_user)):
+    """Récupère les paramètres de téléchargement"""
+    config = await get_download_config()
+    if config:
+        return {
+            "base_url": config.get("base_url", ""),
+            "download_path": config.get("download_path", "/downloads"),
+            "link_expiry_hours": config.get("link_expiry_hours", 1),
+            "configured": True
+        }
+    return {"configured": False}
+
+@admin_router.get("/settings/nginx-config")
+async def get_nginx_config(admin: dict = Depends(get_admin_user)):
+    """Génère la configuration nginx pour les URLs signées"""
+    config = await get_download_config()
+    if not config:
+        return {"error": "Téléchargements non configurés"}
+    
+    nginx_config = f"""# Configuration nginx pour les téléchargements sécurisés
+# À ajouter dans votre bloc server
+
+location /downloads/ {{
+    # Chemin vers vos fichiers qBittorrent
+    alias {config.get('download_path', '/downloads')}/;
+    
+    # Validation du lien sécurisé
+    secure_link $arg_md5,$arg_expires;
+    secure_link_md5 "$secure_link_expires$uri {config.get('secret_key', 'YOUR_SECRET_KEY')}";
+    
+    # Si le lien est invalide ou expiré
+    if ($secure_link = "") {{
+        return 403;
+    }}
+    if ($secure_link = "0") {{
+        return 410;  # Lien expiré
+    }}
+    
+    # Headers pour le téléchargement
+    add_header Content-Disposition 'attachment';
+    
+    # Optionnel: limiter la bande passante par connexion
+    # limit_rate 10m;
+}}"""
+    
+    return {"config": nginx_config}
+
 @admin_router.post("/settings/test-qbittorrent")
 async def test_qbit_connection(admin: dict = Depends(get_admin_user)):
     """Teste la connexion à qBittorrent"""
