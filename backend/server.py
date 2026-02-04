@@ -449,11 +449,21 @@ async def save_qbit_settings(settings: QBitSettings, admin: dict = Depends(get_a
     """Sauvegarde les paramètres qBittorrent"""
     global qbit_session_cookie
     
+    # Nettoyer le host (enlever protocole et port si inclus par erreur)
+    clean_host = settings.host.strip()
+    if clean_host.startswith("https://"):
+        clean_host = clean_host.replace("https://", "")
+    if clean_host.startswith("http://"):
+        clean_host = clean_host.replace("http://", "")
+    clean_host = clean_host.rstrip("/")
+    if ":" in clean_host:
+        clean_host = clean_host.split(":")[0]
+    
     await db.settings.update_one(
         {"type": "app_settings"},
         {"$set": {
             "qbittorrent": {
-                "host": settings.host,
+                "host": clean_host,
                 "port": settings.port,
                 "username": settings.username,
                 "password": settings.password,
