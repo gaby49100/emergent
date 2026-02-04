@@ -53,8 +53,8 @@ const DashboardPage = () => {
 
     useEffect(() => {
         fetchData();
-        // Polling toutes les 3 secondes
-        const interval = setInterval(fetchData, 3000);
+        // Polling toutes les 5 secondes
+        const interval = setInterval(fetchData, 5000);
         return () => clearInterval(interval);
     }, []);
 
