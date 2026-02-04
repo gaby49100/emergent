@@ -761,6 +761,19 @@ async def add_torrent(
                 raise HTTPException(status_code=403, detail=f"Limite de {group['max_torrents']} torrents atteinte pour votre groupe")
     
     try:
+        # Extraire le hash du magnet AVANT d'ajouter
+        torrent_hash = ""
+        magnet_lower = torrent_data.magnet.lower()
+        
+        # Chercher btih: dans différents formats
+        if "btih:" in magnet_lower:
+            # Format: magnet:?xt=urn:btih:HASH&...
+            import re
+            match = re.search(r'btih:([a-f0-9]{40}|[a-z2-7]{32})', magnet_lower)
+            if match:
+                torrent_hash = match.group(1)
+                logger.info(f"Hash extrait du magnet: {torrent_hash}")
+        
         # Ajouter à qBittorrent
         response = await qbit_request(
             "POST",
@@ -771,12 +784,23 @@ async def add_torrent(
         if response.status_code != 200:
             raise HTTPException(status_code=400, detail="Erreur lors de l'ajout du torrent à qBittorrent")
         
-        # Extraire le hash du magnet
-        torrent_hash = ""
-        if "btih:" in torrent_data.magnet.lower():
-            parts = torrent_data.magnet.lower().split("btih:")
-            if len(parts) > 1:
-                torrent_hash = parts[1].split("&")[0]
+        # Si on n'a pas trouvé le hash, essayer de le récupérer depuis qBittorrent
+        if not torrent_hash:
+            import asyncio
+            await asyncio.sleep(2)  # Attendre que qBittorrent traite le torrent
+            try:
+                qbit_response = await qbit_request("GET", "/api/v2/torrents/info")
+                if qbit_response.status_code == 200:
+                    qbit_torrents = qbit_response.json()
+                    # Prendre le dernier torrent ajouté
+                    if qbit_torrents:
+                        for qt in sorted(qbit_torrents, key=lambda x: x.get('added_on', 0), reverse=True):
+                            if qt.get('name', '').lower() in torrent_data.name.lower() or torrent_data.name.lower() in qt.get('name', '').lower():
+                                torrent_hash = qt.get('hash', '')
+                                logger.info(f"Hash récupéré depuis qBittorrent: {torrent_hash}")
+                                break
+            except Exception as e:
+                logger.warning(f"Impossible de récupérer le hash depuis qBittorrent: {e}")
         
         # Sauvegarder en base de données
         torrent_id = str(uuid.uuid4())
@@ -793,8 +817,9 @@ async def add_torrent(
         }
         
         await db.torrents.insert_one(torrent_doc)
+        logger.info(f"Torrent ajouté: {torrent_data.name} avec hash: {torrent_hash}")
         
-        return {"message": "Torrent ajouté avec succès", "id": torrent_id}
+        return {"message": "Torrent ajouté avec succès", "id": torrent_id, "hash": torrent_hash}
     
     except HTTPException:
         raise
