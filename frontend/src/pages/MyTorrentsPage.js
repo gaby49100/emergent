@@ -98,6 +98,13 @@ const MyTorrentsPage = () => {
     const [torrentName, setTorrentName] = useState('');
     const [torrentFile, setTorrentFile] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    
+    // Files dialog state
+    const [filesDialogOpen, setFilesDialogOpen] = useState(false);
+    const [selectedTorrent, setSelectedTorrent] = useState(null);
+    const [torrentFiles, setTorrentFiles] = useState([]);
+    const [loadingFiles, setLoadingFiles] = useState(false);
+    const [downloadingFile, setDownloadingFile] = useState(null);
 
     const fetchTorrents = useCallback(async () => {
         try {
@@ -116,6 +123,41 @@ const MyTorrentsPage = () => {
         const interval = setInterval(fetchTorrents, 5000);
         return () => clearInterval(interval);
     }, [fetchTorrents]);
+
+    const handleOpenFiles = async (torrent) => {
+        setSelectedTorrent(torrent);
+        setFilesDialogOpen(true);
+        setLoadingFiles(true);
+        
+        try {
+            const response = await axios.get(`${API}/torrents/${torrent.id}/files`);
+            setTorrentFiles(response.data.files);
+        } catch (error) {
+            const message = error.response?.data?.detail || 'Erreur lors du chargement des fichiers';
+            toast.error(message);
+            setTorrentFiles([]);
+        } finally {
+            setLoadingFiles(false);
+        }
+    };
+
+    const handleDownloadFile = async (torrent, filePath = null) => {
+        setDownloadingFile(filePath || 'single');
+        
+        try {
+            const params = filePath ? `?file_path=${encodeURIComponent(filePath)}` : '';
+            const response = await axios.get(`${API}/torrents/${torrent.id}/download-link${params}`);
+            
+            // Ouvrir le lien dans un nouvel onglet
+            window.open(response.data.url, '_blank');
+            toast.success(`Téléchargement de "${response.data.filename}" démarré`);
+        } catch (error) {
+            const message = error.response?.data?.detail || 'Erreur lors de la génération du lien';
+            toast.error(message);
+        } finally {
+            setDownloadingFile(null);
+        }
+    };
 
     const handleAddMagnet = async (e) => {
         e.preventDefault();
