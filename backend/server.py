@@ -160,6 +160,29 @@ class TorrentStats(BaseModel):
     total_download_speed: float
     total_upload_speed: float
 
+# File Download Models
+class TorrentFile(BaseModel):
+    name: str
+    size: int
+    progress: float
+    path: str
+
+class TorrentFilesResponse(BaseModel):
+    torrent_name: str
+    files: List[TorrentFile]
+    is_single_file: bool
+
+class DownloadLinkResponse(BaseModel):
+    url: str
+    filename: str
+    expires_at: str
+
+class DownloadSettings(BaseModel):
+    base_url: str = Field(..., min_length=1)  # Ex: https://files.gabysoso.fr
+    secret_key: str = Field(..., min_length=16)  # Clé partagée avec nginx
+    download_path: str = Field(default="/downloads")  # Chemin dans qBittorrent
+    link_expiry_hours: int = Field(default=1, ge=1, le=24)
+
 # Jackett Models
 class JackettSearchResult(BaseModel):
     title: str
