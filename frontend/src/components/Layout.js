@@ -1,4 +1,4 @@
-// Layout - Composant de mise en page avec sidebar
+// Layout - Composant de mise en page avec sidebar et menu admin
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -12,6 +12,7 @@ import {
     DropdownMenuTrigger
 } from './ui/dropdown-menu';
 import { ScrollArea } from './ui/scroll-area';
+import { Separator } from './ui/separator';
 import {
     LayoutDashboard,
     Download,
@@ -22,7 +23,10 @@ import {
     Menu,
     X,
     User,
-    Check
+    Check,
+    Settings,
+    Shield,
+    UsersRound
 } from 'lucide-react';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -35,11 +39,19 @@ const Layout = ({ children }) => {
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
 
+    const isAdmin = user?.role === 'admin';
+
     const navItems = [
         { path: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
         { path: '/my-torrents', label: 'Mes torrents', icon: Download },
         { path: '/all-torrents', label: 'Tous les torrents', icon: Users },
         { path: '/search', label: 'Recherche Jackett', icon: Search }
+    ];
+
+    const adminItems = [
+        { path: '/admin/settings', label: 'Paramètres', icon: Settings },
+        { path: '/admin/users', label: 'Utilisateurs', icon: UsersRound },
+        { path: '/admin/groups', label: 'Groupes', icon: Shield }
     ];
 
     // Fetch notifications
@@ -132,6 +144,32 @@ const Layout = ({ children }) => {
                                 </Link>
                             ))}
                         </nav>
+
+                        {/* Admin Section */}
+                        {isAdmin && (
+                            <>
+                                <Separator className="my-4" />
+                                <div className="mb-2">
+                                    <span className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                        Administration
+                                    </span>
+                                </div>
+                                <nav className="space-y-1">
+                                    {adminItems.map((item) => (
+                                        <Link
+                                            key={item.path}
+                                            to={item.path}
+                                            className={`nav-link ${location.pathname === item.path ? 'active' : ''}`}
+                                            onClick={() => setSidebarOpen(false)}
+                                            data-testid={`nav-${item.path.replace('/admin/', 'admin-')}`}
+                                        >
+                                            <item.icon className="w-5 h-5" />
+                                            {item.label}
+                                        </Link>
+                                    ))}
+                                </nav>
+                            </>
+                        )}
                     </ScrollArea>
 
                     {/* User section */}
@@ -141,7 +179,14 @@ const Layout = ({ children }) => {
                                 <User className="w-4 h-4" />
                             </div>
                             <div className="flex-1 min-w-0">
-                                <p className="font-medium truncate">{user?.username}</p>
+                                <div className="flex items-center gap-2">
+                                    <p className="font-medium truncate">{user?.username}</p>
+                                    {isAdmin && (
+                                        <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-primary/20 text-primary">
+                                            Admin
+                                        </span>
+                                    )}
+                                </div>
                                 <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
                             </div>
                         </div>
@@ -233,10 +278,31 @@ const Layout = ({ children }) => {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                             <div className="px-3 py-2">
-                                <p className="font-medium">{user?.username}</p>
+                                <div className="flex items-center gap-2">
+                                    <p className="font-medium">{user?.username}</p>
+                                    {isAdmin && (
+                                        <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-primary/20 text-primary">
+                                            Admin
+                                        </span>
+                                    )}
+                                </div>
                                 <p className="text-xs text-muted-foreground">{user?.email}</p>
+                                {user?.group_name && (
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                        Groupe: {user.group_name}
+                                    </p>
+                                )}
                             </div>
                             <DropdownMenuSeparator />
+                            {isAdmin && (
+                                <>
+                                    <DropdownMenuItem onClick={() => navigate('/admin/settings')}>
+                                        <Settings className="w-4 h-4 mr-2" />
+                                        Administration
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                </>
+                            )}
                             <DropdownMenuItem onClick={handleLogout} data-testid="logout-btn">
                                 <LogOut className="w-4 h-4 mr-2" />
                                 Déconnexion

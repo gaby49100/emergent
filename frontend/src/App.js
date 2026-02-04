@@ -1,4 +1,4 @@
-// App.js - Application principale avec routing
+// App.js - Application principale avec routing et pages admin
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Toaster } from './components/ui/sonner';
@@ -8,11 +8,14 @@ import DashboardPage from './pages/DashboardPage';
 import MyTorrentsPage from './pages/MyTorrentsPage';
 import AllTorrentsPage from './pages/AllTorrentsPage';
 import JackettSearchPage from './pages/JackettSearchPage';
+import AdminSettingsPage from './pages/AdminSettingsPage';
+import AdminUsersPage from './pages/AdminUsersPage';
+import AdminGroupsPage from './pages/AdminGroupsPage';
 import './App.css';
 
 // Route protégée - redirige vers login si non authentifié
-const ProtectedRoute = ({ children }) => {
-    const { isAuthenticated, loading } = useAuth();
+const ProtectedRoute = ({ children, adminOnly = false }) => {
+    const { isAuthenticated, loading, user } = useAuth();
 
     if (loading) {
         return (
@@ -24,6 +27,10 @@ const ProtectedRoute = ({ children }) => {
 
     if (!isAuthenticated) {
         return <Navigate to="/login" replace />;
+    }
+
+    if (adminOnly && user?.role !== 'admin') {
+        return <Navigate to="/dashboard" replace />;
     }
 
     return <Layout>{children}</Layout>;
@@ -61,7 +68,7 @@ function AppRoutes() {
                 }
             />
 
-            {/* Routes protégées */}
+            {/* Routes protégées - Utilisateurs */}
             <Route
                 path="/dashboard"
                 element={
@@ -91,6 +98,32 @@ function AppRoutes() {
                 element={
                     <ProtectedRoute>
                         <JackettSearchPage />
+                    </ProtectedRoute>
+                }
+            />
+
+            {/* Routes Admin */}
+            <Route
+                path="/admin/settings"
+                element={
+                    <ProtectedRoute adminOnly>
+                        <AdminSettingsPage />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/admin/users"
+                element={
+                    <ProtectedRoute adminOnly>
+                        <AdminUsersPage />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/admin/groups"
+                element={
+                    <ProtectedRoute adminOnly>
+                        <AdminGroupsPage />
                     </ProtectedRoute>
                 }
             />
