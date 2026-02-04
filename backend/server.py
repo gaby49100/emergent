@@ -525,14 +525,17 @@ async def test_jackett_connection(admin: dict = Depends(get_admin_user)):
         return {"status": "error", "message": "Jackett non configuré"}
     
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
             response = await client.get(
                 f"{config['url']}/api/v2.0/server/config",
                 params={"apikey": config['api_key']}
             )
             if response.status_code == 200:
                 return {"status": "connected"}
-            return {"status": "error", "message": "Échec de connexion"}
+            elif response.status_code == 302:
+                return {"status": "error", "message": "Redirection détectée - vérifiez l'URL Jackett"}
+            else:
+                return {"status": "error", "message": f"Code HTTP {response.status_code}: {response.text[:100]}"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
