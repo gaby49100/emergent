@@ -959,10 +959,28 @@ async def get_all_torrents(current_user: dict = Depends(get_current_user)):
     try:
         response = await qbit_request("GET", "/api/v2/torrents/info")
         if response.status_code == 200:
-            qbit_torrents = {t["hash"].lower(): t for t in response.json()}
+            qbit_torrents_list = response.json()
+            qbit_torrents = {t["hash"].lower(): t for t in qbit_torrents_list}
+            qbit_by_name = {t["name"].lower(): t for t in qbit_torrents_list}
             
             for torrent in torrents:
                 torrent_hash = torrent.get("hash", "").lower()
+                
+                # Si pas de hash, essayer de le trouver par nom
+                if not torrent_hash:
+                    torrent_name = torrent.get("name", "").lower()
+                    for qname, qt in qbit_by_name.items():
+                        if torrent_name[:30] in qname or qname[:30] in torrent_name:
+                            torrent_hash = qt["hash"].lower()
+                            # Mettre à jour le hash en DB
+                            await db.torrents.update_one(
+                                {"id": torrent["id"]},
+                                {"$set": {"hash": torrent_hash}}
+                            )
+                            torrent["hash"] = torrent_hash
+                            logger.info(f"Hash synchronisé pour: {torrent['name']}")
+                            break
+                
                 if torrent_hash and torrent_hash in qbit_torrents:
                     qt = qbit_torrents[torrent_hash]
                     torrent["progress"] = qt.get("progress", 0) * 100
