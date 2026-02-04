@@ -124,9 +124,13 @@ const MyTorrentsPage = () => {
                 magnet: magnetLink
             });
             toast.success('Torrent ajouté avec succès');
+            // Reset form first, then close dialog
             setMagnetLink('');
             setTorrentName('');
-            setAddDialogOpen(false);
+            // Use setTimeout to ensure state updates before closing
+            setTimeout(() => {
+                setAddDialogOpen(false);
+            }, 100);
             fetchTorrents();
         } catch (error) {
             const message = error.response?.data?.detail || 'Erreur lors de l\'ajout';
