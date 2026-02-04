@@ -1133,6 +1133,143 @@ async def get_all_torrents(current_user: dict = Depends(get_current_user)):
     
     return torrents
 
+@torrent_router.get("/{torrent_id}/files", response_model=TorrentFilesResponse)
+async def get_torrent_files(torrent_id: str, current_user: dict = Depends(get_current_user)):
+    """Récupère la liste des fichiers d'un torrent"""
+    torrent = await db.torrents.find_one({"id": torrent_id}, {"_id": 0})
+    
+    if not torrent:
+        raise HTTPException(status_code=404, detail="Torrent non trouvé")
+    
+    # Vérifier que l'utilisateur a accès (propriétaire ou peut voir tous)
+    if torrent["user_id"] != current_user["id"]:
+        if current_user.get("group_id"):
+            group = await db.groups.find_one({"id": current_user["group_id"]})
+            if group and not group.get("can_see_all_torrents", True):
+                raise HTTPException(status_code=403, detail="Accès non autorisé")
+    
+    if not torrent.get("hash"):
+        raise HTTPException(status_code=400, detail="Hash du torrent non disponible")
+    
+    try:
+        response = await qbit_request(
+            "GET", 
+            "/api/v2/torrents/files",
+            params={"hash": torrent["hash"]}
+        )
+        
+        if response.status_code != 200:
+            raise HTTPException(status_code=500, detail="Erreur récupération fichiers")
+        
+        files_data = response.json()
+        files = []
+        
+        for f in files_data:
+            files.append(TorrentFile(
+                name=f.get("name", "").split("/")[-1],  # Nom du fichier sans le chemin
+                size=f.get("size", 0),
+                progress=f.get("progress", 0) * 100,
+                path=f.get("name", "")  # Chemin complet relatif
+            ))
+        
+        is_single_file = len(files) == 1 and "/" not in files_data[0].get("name", "") if files_data else True
+        
+        return TorrentFilesResponse(
+            torrent_name=torrent["name"],
+            files=files,
+            is_single_file=is_single_file
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur récupération fichiers: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+
+@torrent_router.get("/{torrent_id}/download-link")
+async def get_download_link(
+    torrent_id: str, 
+    file_path: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Génère un lien de téléchargement signé pour un fichier"""
+    torrent = await db.torrents.find_one({"id": torrent_id}, {"_id": 0})
+    
+    if not torrent:
+        raise HTTPException(status_code=404, detail="Torrent non trouvé")
+    
+    # Vérifier accès
+    if torrent["user_id"] != current_user["id"]:
+        if current_user.get("group_id"):
+            group = await db.groups.find_one({"id": current_user["group_id"]})
+            if group and not group.get("can_see_all_torrents", True):
+                raise HTTPException(status_code=403, detail="Accès non autorisé")
+    
+    # Récupérer config téléchargement
+    download_config = await get_download_config()
+    if not download_config:
+        raise HTTPException(status_code=503, detail="Téléchargements non configurés. Contactez l'administrateur.")
+    
+    # Récupérer les infos du torrent depuis qBittorrent pour avoir le save_path
+    try:
+        response = await qbit_request(
+            "GET",
+            "/api/v2/torrents/info",
+            params={"hashes": torrent.get("hash", "")}
+        )
+        
+        if response.status_code != 200 or not response.json():
+            raise HTTPException(status_code=500, detail="Impossible de récupérer les infos du torrent")
+        
+        qbit_torrent = response.json()[0]
+        content_path = qbit_torrent.get("content_path", "")
+        save_path = qbit_torrent.get("save_path", "")
+        torrent_name = qbit_torrent.get("name", "")
+        
+        # Construire le chemin du fichier
+        if file_path:
+            # Fichier spécifique demandé
+            full_path = f"/downloads/{torrent_name}/{file_path}"
+            filename = file_path.split("/")[-1]
+        else:
+            # Torrent complet (fichier unique)
+            # Vérifier si c'est un fichier unique ou un dossier
+            files_response = await qbit_request(
+                "GET",
+                "/api/v2/torrents/files", 
+                params={"hash": torrent.get("hash", "")}
+            )
+            files = files_response.json() if files_response.status_code == 200 else []
+            
+            if len(files) == 1:
+                full_path = f"/downloads/{files[0].get('name', torrent_name)}"
+                filename = files[0].get('name', torrent_name).split("/")[-1]
+            else:
+                raise HTTPException(
+                    status_code=400, 
+                    detail="Ce torrent contient plusieurs fichiers. Spécifiez un fichier à télécharger."
+                )
+        
+        # Générer l'URL signée
+        url, expires_at = generate_signed_url(
+            download_config["base_url"],
+            full_path,
+            download_config["secret_key"],
+            download_config.get("link_expiry_hours", 1)
+        )
+        
+        return DownloadLinkResponse(
+            url=url,
+            filename=filename,
+            expires_at=expires_at
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur génération lien: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+
 @torrent_router.delete("/{torrent_id}")
 async def delete_torrent(torrent_id: str, current_user: dict = Depends(get_current_user)):
     """Supprime un torrent de l'utilisateur"""
