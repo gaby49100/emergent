@@ -494,6 +494,16 @@ const MyTorrentsPage = () => {
                                                                 Pause
                                                             </DropdownMenuItem>
                                                         )}
+                                                        {torrent.progress >= 100 && (
+                                                            <>
+                                                                <DropdownMenuSeparator />
+                                                                <DropdownMenuItem onClick={() => handleOpenFiles(torrent)} data-testid={`files-${torrent.id}`}>
+                                                                    <FolderOpen className="w-4 h-4 mr-2" />
+                                                                    Fichiers
+                                                                </DropdownMenuItem>
+                                                            </>
+                                                        )}
+                                                        <DropdownMenuSeparator />
                                                         <DropdownMenuItem
                                                             onClick={() => handleDelete(torrent.id)}
                                                             className="text-destructive"
@@ -513,6 +523,101 @@ const MyTorrentsPage = () => {
                     </CardContent>
                 </Card>
             )}
+
+            {/* Files Dialog */}
+            <Dialog open={filesDialogOpen} onOpenChange={setFilesDialogOpen}>
+                <DialogContent className="max-w-2xl" data-testid="files-dialog">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <FolderOpen className="w-5 h-5" />
+                            Fichiers du torrent
+                        </DialogTitle>
+                        <DialogDescription>
+                            {selectedTorrent?.name}
+                        </DialogDescription>
+                    </DialogHeader>
+                    
+                    {loadingFiles ? (
+                        <div className="flex items-center justify-center py-8">
+                            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                        </div>
+                    ) : torrentFiles.length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                            Aucun fichier trouvé
+                        </div>
+                    ) : torrentFiles.length === 1 ? (
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between p-4 rounded-lg bg-secondary/30">
+                                <div className="flex items-center gap-3">
+                                    <File className="w-8 h-8 text-primary" />
+                                    <div>
+                                        <p className="font-medium">{torrentFiles[0].name}</p>
+                                        <p className="text-sm text-muted-foreground">
+                                            {formatSize(torrentFiles[0].size)}
+                                        </p>
+                                    </div>
+                                </div>
+                                <Button
+                                    onClick={() => handleDownloadFile(selectedTorrent)}
+                                    disabled={downloadingFile !== null}
+                                    data-testid="download-single-file"
+                                >
+                                    {downloadingFile ? (
+                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    ) : (
+                                        <Download className="w-4 h-4 mr-2" />
+                                    )}
+                                    Télécharger
+                                </Button>
+                            </div>
+                        </div>
+                    ) : (
+                        <ScrollArea className="max-h-96">
+                            <div className="space-y-2">
+                                {torrentFiles.map((file, index) => (
+                                    <div
+                                        key={index}
+                                        className="flex items-center justify-between p-3 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors"
+                                        data-testid={`file-${index}`}
+                                    >
+                                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                                            <File className="w-5 h-5 text-muted-foreground shrink-0" />
+                                            <div className="min-w-0">
+                                                <p className="font-medium truncate" title={file.path}>
+                                                    {file.name}
+                                                </p>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {formatSize(file.size)} • {file.progress.toFixed(0)}%
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => handleDownloadFile(selectedTorrent, file.path)}
+                                            disabled={downloadingFile !== null || file.progress < 100}
+                                            className="shrink-0 ml-2"
+                                            data-testid={`download-file-${index}`}
+                                        >
+                                            {downloadingFile === file.path ? (
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                            ) : (
+                                                <Download className="w-4 h-4" />
+                                            )}
+                                        </Button>
+                                    </div>
+                                ))}
+                            </div>
+                        </ScrollArea>
+                    )}
+                    
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button variant="outline">Fermer</Button>
+                        </DialogClose>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };
