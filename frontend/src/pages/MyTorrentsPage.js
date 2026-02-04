@@ -5,6 +5,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { ScrollArea } from '../components/ui/scroll-area';
 import {
     Dialog,
     DialogContent,
@@ -19,6 +20,7 @@ import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
+    DropdownMenuSeparator,
     DropdownMenuTrigger
 } from '../components/ui/dropdown-menu';
 import { toast } from 'sonner';
@@ -33,7 +35,11 @@ import {
     Link,
     FileUp,
     HardDrive,
-    RefreshCw
+    RefreshCw,
+    FolderOpen,
+    File,
+    ExternalLink,
+    Loader2
 } from 'lucide-react';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
