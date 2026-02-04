@@ -276,17 +276,19 @@ async def qbit_login():
         return False
     
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(follow_redirects=True, verify=True) as client:
+            logger.info(f"Tentative connexion qBittorrent: {config['host']}")
             response = await client.post(
                 f"{config['host']}/api/v2/auth/login",
                 data={"username": config['username'], "password": config['password']}
             )
+            logger.info(f"qBittorrent login response: {response.status_code} - {response.text}")
             if response.status_code == 200 and response.text == "Ok.":
                 qbit_session_cookie = response.cookies.get("SID")
                 logger.info("Connexion qBittorrent réussie")
                 return True
             else:
-                logger.error(f"Échec connexion qBittorrent: {response.text}")
+                logger.error(f"Échec connexion qBittorrent: Code {response.status_code}, Réponse: {response.text}")
                 return False
     except Exception as e:
         logger.error(f"Erreur connexion qBittorrent: {e}")
