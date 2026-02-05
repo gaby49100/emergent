@@ -899,6 +899,15 @@ async def add_torrent(
                 torrent_hash = match.group(1)
                 logger.info(f"Hash extrait du magnet: {torrent_hash}")
         
+        # Récupérer les torrents AVANT l'ajout pour comparer après
+        existing_hashes = set()
+        try:
+            pre_response = await qbit_request("GET", "/api/v2/torrents/info")
+            if pre_response.status_code == 200:
+                existing_hashes = {t.get('hash', '').lower() for t in pre_response.json()}
+        except:
+            pass
+        
         # Ajouter à qBittorrent
         response = await qbit_request(
             "POST",
@@ -909,21 +918,27 @@ async def add_torrent(
         if response.status_code != 200:
             raise HTTPException(status_code=400, detail="Erreur lors de l'ajout du torrent à qBittorrent")
         
-        # Si on n'a pas trouvé le hash, essayer de le récupérer depuis qBittorrent
+        # Récupérer le hash depuis qBittorrent (le nouveau torrent)
         if not torrent_hash:
             import asyncio
-            await asyncio.sleep(2)  # Attendre que qBittorrent traite le torrent
+            await asyncio.sleep(3)  # Attendre que qBittorrent traite le torrent
             try:
                 qbit_response = await qbit_request("GET", "/api/v2/torrents/info")
                 if qbit_response.status_code == 200:
                     qbit_torrents = qbit_response.json()
-                    # Prendre le dernier torrent ajouté
-                    if qbit_torrents:
-                        for qt in sorted(qbit_torrents, key=lambda x: x.get('added_on', 0), reverse=True):
-                            if qt.get('name', '').lower() in torrent_data.name.lower() or torrent_data.name.lower() in qt.get('name', '').lower():
-                                torrent_hash = qt.get('hash', '')
-                                logger.info(f"Hash récupéré depuis qBittorrent: {torrent_hash}")
-                                break
+                    # Trouver le nouveau torrent (celui qui n'existait pas avant)
+                    for qt in qbit_torrents:
+                        qt_hash = qt.get('hash', '').lower()
+                        if qt_hash and qt_hash not in existing_hashes:
+                            torrent_hash = qt_hash
+                            logger.info(f"Hash du nouveau torrent: {torrent_hash} ({qt.get('name', '')})")
+                            break
+                    
+                    # Si toujours pas trouvé, prendre le plus récent
+                    if not torrent_hash and qbit_torrents:
+                        latest = max(qbit_torrents, key=lambda x: x.get('added_on', 0))
+                        torrent_hash = latest.get('hash', '')
+                        logger.info(f"Hash récupéré (dernier ajouté): {torrent_hash}")
             except Exception as e:
                 logger.warning(f"Impossible de récupérer le hash depuis qBittorrent: {e}")
         
