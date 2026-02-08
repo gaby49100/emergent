@@ -135,12 +135,12 @@ GET  /api/admin/stats
 
 ## Backlog Priorisé
 
-### P0 - Configuration (Utilisateur)
-- [ ] Configurer qBittorrent via l'interface admin
-- [ ] Configurer Jackett via l'interface admin
+### P0 - Critique ✅ (TERMINÉ 2026-02-08)
+- [x] **Correction synchronisation hash torrents** - Le hash est maintenant récupéré lors de l'ajout via magnet et fichier .torrent
+- [x] **Amélioration correspondance noms torrents** - Normalisation intelligente pour synchroniser les anciens torrents sans hash
 
-### P1 - Important
-- [ ] Téléchargement de fichiers terminés
+### P1 - Important (EN ATTENTE)
+- [ ] **Téléchargements sécurisés** - Backend implémenté, nécessite configuration Nginx côté utilisateur
 - [ ] Application des limites de vitesse par groupe
 - [ ] Historique des actions admin
 
