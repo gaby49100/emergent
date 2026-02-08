@@ -66,6 +66,7 @@ Créer un site web complet multi-utilisateurs en français pour gérer des torre
 - **Page Paramètres Admin**:
   - Configuration qBittorrent (host, port, username, password, HTTPS)
   - Configuration Jackett (URL, API key)
+  - **Configuration téléchargements sécurisés** (URLs signées avec Nginx)
   - Test de connexion pour chaque service
   - Stockage en base de données
 
