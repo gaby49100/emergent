@@ -604,28 +604,25 @@ async def get_download_settings(admin: dict = Depends(get_admin_user)):
 
 @admin_router.get("/settings/nginx-config")
 async def get_nginx_config(admin: dict = Depends(get_admin_user)):
-    """Génère la configuration nginx pour les URLs signées"""
+    """Génère la configuration nginx pour les URLs signées (sans expiration)"""
     config = await get_download_config()
     if not config:
         return {"error": "Téléchargements non configurés"}
     
-    nginx_config = f"""# Configuration nginx pour les téléchargements sécurisés
+    nginx_config = f"""# Configuration nginx pour les téléchargements sécurisés (SANS EXPIRATION)
 # À ajouter dans votre bloc server
 
 location /downloads/ {{
     # Chemin vers vos fichiers qBittorrent
     alias {config.get('download_path', '/downloads')}/;
     
-    # Validation du lien sécurisé
-    secure_link $arg_md5,$arg_expires;
-    secure_link_md5 "$secure_link_expires$uri {config.get('secret_key', 'YOUR_SECRET_KEY')}";
+    # Validation du lien sécurisé (sans expiration)
+    secure_link $arg_md5;
+    secure_link_md5 "$uri {config.get('secret_key', 'YOUR_SECRET_KEY')}";
     
-    # Si le lien est invalide ou expiré
+    # Si le lien est invalide
     if ($secure_link = "") {{
         return 403;
-    }}
-    if ($secure_link = "0") {{
-        return 410;  # Lien expiré
     }}
     
     # Headers pour le téléchargement
