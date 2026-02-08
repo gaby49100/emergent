@@ -974,6 +974,8 @@ async def add_torrent_file(
     current_user: dict = Depends(get_current_user)
 ):
     """Ajoute un torrent via fichier .torrent"""
+    import asyncio
+    
     # Check group limits
     if current_user.get("group_id"):
         group = await db.groups.find_one({"id": current_user["group_id"]})
@@ -985,6 +987,15 @@ async def add_torrent_file(
     try:
         content = await file.read()
         
+        # Récupérer les torrents AVANT l'ajout pour comparer après
+        existing_hashes = set()
+        try:
+            pre_response = await qbit_request("GET", "/api/v2/torrents/info")
+            if pre_response.status_code == 200:
+                existing_hashes = {t.get('hash', '').lower() for t in pre_response.json()}
+        except:
+            pass
+        
         # Ajouter à qBittorrent
         response = await qbit_request(
             "POST",
@@ -995,6 +1006,30 @@ async def add_torrent_file(
         if response.status_code != 200:
             raise HTTPException(status_code=400, detail="Erreur lors de l'ajout du torrent")
         
+        # Récupérer le hash depuis qBittorrent (le nouveau torrent)
+        torrent_hash = ""
+        await asyncio.sleep(3)  # Attendre que qBittorrent traite le torrent
+        
+        try:
+            qbit_response = await qbit_request("GET", "/api/v2/torrents/info")
+            if qbit_response.status_code == 200:
+                qbit_torrents = qbit_response.json()
+                # Trouver le nouveau torrent (celui qui n'existait pas avant)
+                for qt in qbit_torrents:
+                    qt_hash = qt.get('hash', '').lower()
+                    if qt_hash and qt_hash not in existing_hashes:
+                        torrent_hash = qt_hash
+                        logger.info(f"Hash du nouveau torrent (fichier): {torrent_hash} ({qt.get('name', '')})")
+                        break
+                
+                # Si toujours pas trouvé, prendre le plus récent
+                if not torrent_hash and qbit_torrents:
+                    latest = max(qbit_torrents, key=lambda x: x.get('added_on', 0))
+                    torrent_hash = latest.get('hash', '')
+                    logger.info(f"Hash récupéré (dernier ajouté - fichier): {torrent_hash}")
+        except Exception as e:
+            logger.warning(f"Impossible de récupérer le hash depuis qBittorrent: {e}")
+        
         # Sauvegarder en base de données
         torrent_id = str(uuid.uuid4())
         torrent_doc = {
@@ -1003,15 +1038,16 @@ async def add_torrent_file(
             "username": current_user["username"],
             "name": name,
             "magnet": "",
-            "hash": "",
+            "hash": torrent_hash,
             "status": "downloading",
             "progress": 0.0,
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         
         await db.torrents.insert_one(torrent_doc)
+        logger.info(f"Torrent (fichier) ajouté: {name} avec hash: {torrent_hash}")
         
-        return {"message": "Fichier torrent ajouté avec succès", "id": torrent_id}
+        return {"message": "Fichier torrent ajouté avec succès", "id": torrent_id, "hash": torrent_hash}
     
     except HTTPException:
         raise
