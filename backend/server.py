@@ -310,9 +310,13 @@ def generate_signed_url(base_url: str, file_path: str, secret_key: str, expiry_h
     md5_hash = hashlib.md5(string_to_sign.encode()).digest()
     signature = base64.urlsafe_b64encode(md5_hash).decode().rstrip('=')
     
-    # URL finale avec chemin ENCODÉ
+    # Extraire le nom du fichier pour le header Content-Disposition
+    filename = file_path.split('/')[-1]
+    
+    # URL finale avec chemin ENCODÉ + filename pour Content-Disposition
     encoded_path = quote(file_path, safe='/')
-    url = f"{base_url}{encoded_path}?md5={signature}"
+    encoded_filename = quote(filename)
+    url = f"{base_url}{encoded_path}?md5={signature}&filename={encoded_filename}"
     
     return url, "never"
 
