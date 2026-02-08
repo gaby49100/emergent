@@ -155,3 +155,19 @@ GET  /api/admin/stats
 - Les paramètres sont stockés dans la collection MongoDB `settings`
 - Le groupe "Défaut" ne peut pas être supprimé
 - Les utilisateurs supprimés voient leurs torrents également supprimés
+- **Synchronisation des hash** : Le hash est récupéré depuis qBittorrent immédiatement après l'ajout du torrent. Pour les torrents existants sans hash, une correspondance par nom normalisé est utilisée.
+
+## Corrections appliquées (2026-02-08)
+
+### Bug: Hash manquant lors de l'ajout de torrents
+**Problème**: Le hash des torrents n'était pas sauvegardé lors de l'ajout, ce qui empêchait le suivi de la progression.
+
+**Solution implémentée**:
+1. Pour l'ajout via **lien magnet** : Extraction du hash depuis l'URL magnet (`btih:`) ou récupération depuis qBittorrent après ajout
+2. Pour l'ajout via **fichier .torrent** : Récupération du hash depuis qBittorrent après ajout en comparant les torrents avant/après
+3. Pour les **torrents existants sans hash** : Algorithme de correspondance par nom normalisé qui:
+   - Supprime la ponctuation et les séparateurs (`.`, `_`, `-`, `:`, etc.)
+   - Supprime les mots de release (french, webrip, x264, etc.)
+   - Supprime les extensions de fichiers (mp4, mkv, etc.)
+   - Supprime les années (2018, 2026, etc.)
+   - Compare les noms normalisés et détecte les patterns de séries TV (S01E02)
