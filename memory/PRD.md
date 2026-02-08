@@ -51,15 +51,16 @@ Créer un site web complet multi-utilisateurs en français pour gérer des torre
 - Gère les utilisateurs (CRUD, rôles, groupes)
 - Gère les groupes (permissions, limites)
 
-## Ce qui a été implémenté (Date: 2026-02-04)
+## Ce qui a été implémenté (Date: 2026-02-08)
 
 ### Phase 1 - Core Features ✅
 - Authentification JWT (inscription/connexion)
 - Dashboard avec statistiques temps réel
 - Page Mes torrents (ajout magnet/fichier, suppression, pause, reprise)
 - Page Tous les torrents
-- Recherche Jackett
+- Recherche Jackett avec tri par seeders
 - Notifications (torrent terminé)
+- **Synchronisation hash torrents avec qBittorrent** (CORRIGÉ 2026-02-08)
 
 ### Phase 2 - Administration ✅
 - **Page Paramètres Admin**:
