@@ -1063,6 +1063,48 @@ async def get_my_torrents(current_user: dict = Depends(get_current_user)):
         {"_id": 0}
     ).to_list(1000)
     
+    # Fonction pour normaliser un nom de torrent
+    def normalize_name(name: str) -> str:
+        """Normalise un nom pour la comparaison (enlève ponctuation, espaces, etc.)"""
+        import re
+        # Convertir en minuscules
+        name = name.lower()
+        # Remplacer les séparateurs courants par des espaces
+        name = re.sub(r'[._\-\[\]\(\)]', ' ', name)
+        # Supprimer les extensions de fichiers
+        name = re.sub(r'\.(mp4|mkv|avi|torrent)$', '', name)
+        # Supprimer les mots courants de release
+        name = re.sub(r'\b(french|vostfr|webrip|hdtv|x264|x265|h264|h265|1080p|720p|480p)\b', '', name)
+        # Normaliser les espaces multiples
+        name = re.sub(r'\s+', ' ', name).strip()
+        return name
+    
+    def match_names(db_name: str, qbit_name: str) -> bool:
+        """Vérifie si deux noms correspondent"""
+        norm_db = normalize_name(db_name)
+        norm_qbit = normalize_name(qbit_name)
+        
+        # Correspondance exacte après normalisation
+        if norm_db == norm_qbit:
+            return True
+        
+        # L'un contient l'autre
+        if norm_db in norm_qbit or norm_qbit in norm_db:
+            return True
+        
+        # Vérifier les mots clés importants (ex: S01E02)
+        import re
+        season_ep = re.findall(r's\d+e\d+', norm_db)
+        if season_ep:
+            # Trouver le titre principal (avant le numéro d'épisode)
+            title_match = re.match(r'^(.+?)\s*s\d+e\d+', norm_db)
+            if title_match:
+                title = title_match.group(1).strip()
+                if len(title) >= 5 and title in norm_qbit and season_ep[0] in norm_qbit:
+                    return True
+        
+        return False
+    
     # Récupérer les infos de progression depuis qBittorrent
     try:
         response = await qbit_request("GET", "/api/v2/torrents/info")
@@ -1074,11 +1116,11 @@ async def get_my_torrents(current_user: dict = Depends(get_current_user)):
             for torrent in torrents:
                 torrent_hash = torrent.get("hash", "").lower()
                 
-                # Si pas de hash, essayer de le trouver par nom
+                # Si pas de hash, essayer de le trouver par nom avec correspondance améliorée
                 if not torrent_hash:
-                    torrent_name = torrent.get("name", "").lower()
+                    torrent_name = torrent.get("name", "")
                     for qname, qt in qbit_by_name.items():
-                        if torrent_name[:30] in qname or qname[:30] in torrent_name:
+                        if match_names(torrent_name, qname):
                             torrent_hash = qt["hash"].lower()
                             # Mettre à jour le hash en DB
                             await db.torrents.update_one(
@@ -1086,7 +1128,7 @@ async def get_my_torrents(current_user: dict = Depends(get_current_user)):
                                 {"$set": {"hash": torrent_hash}}
                             )
                             torrent["hash"] = torrent_hash
-                            logger.info(f"Hash synchronisé pour: {torrent['name']}")
+                            logger.info(f"Hash synchronisé pour: {torrent['name']} -> {torrent_hash}")
                             break
                 
                 if torrent_hash and torrent_hash in qbit_torrents:
@@ -1131,6 +1173,48 @@ async def get_all_torrents(current_user: dict = Depends(get_current_user)):
     
     torrents = await db.torrents.find({}, {"_id": 0}).to_list(1000)
     
+    # Fonction pour normaliser un nom de torrent
+    def normalize_name(name: str) -> str:
+        """Normalise un nom pour la comparaison (enlève ponctuation, espaces, etc.)"""
+        import re
+        # Convertir en minuscules
+        name = name.lower()
+        # Remplacer les séparateurs courants par des espaces
+        name = re.sub(r'[._\-\[\]\(\)]', ' ', name)
+        # Supprimer les extensions de fichiers
+        name = re.sub(r'\.(mp4|mkv|avi|torrent)$', '', name)
+        # Supprimer les mots courants de release
+        name = re.sub(r'\b(french|vostfr|webrip|hdtv|x264|x265|h264|h265|1080p|720p|480p)\b', '', name)
+        # Normaliser les espaces multiples
+        name = re.sub(r'\s+', ' ', name).strip()
+        return name
+    
+    def match_names(db_name: str, qbit_name: str) -> bool:
+        """Vérifie si deux noms correspondent"""
+        norm_db = normalize_name(db_name)
+        norm_qbit = normalize_name(qbit_name)
+        
+        # Correspondance exacte après normalisation
+        if norm_db == norm_qbit:
+            return True
+        
+        # L'un contient l'autre
+        if norm_db in norm_qbit or norm_qbit in norm_db:
+            return True
+        
+        # Vérifier les mots clés importants (ex: S01E02)
+        import re
+        season_ep = re.findall(r's\d+e\d+', norm_db)
+        if season_ep:
+            # Trouver le titre principal (avant le numéro d'épisode)
+            title_match = re.match(r'^(.+?)\s*s\d+e\d+', norm_db)
+            if title_match:
+                title = title_match.group(1).strip()
+                if len(title) >= 5 and title in norm_qbit and season_ep[0] in norm_qbit:
+                    return True
+        
+        return False
+    
     # Récupérer les infos de progression depuis qBittorrent
     try:
         response = await qbit_request("GET", "/api/v2/torrents/info")
@@ -1142,11 +1226,11 @@ async def get_all_torrents(current_user: dict = Depends(get_current_user)):
             for torrent in torrents:
                 torrent_hash = torrent.get("hash", "").lower()
                 
-                # Si pas de hash, essayer de le trouver par nom
+                # Si pas de hash, essayer de le trouver par nom avec correspondance améliorée
                 if not torrent_hash:
-                    torrent_name = torrent.get("name", "").lower()
+                    torrent_name = torrent.get("name", "")
                     for qname, qt in qbit_by_name.items():
-                        if torrent_name[:30] in qname or qname[:30] in torrent_name:
+                        if match_names(torrent_name, qname):
                             torrent_hash = qt["hash"].lower()
                             # Mettre à jour le hash en DB
                             await db.torrents.update_one(
@@ -1154,7 +1238,7 @@ async def get_all_torrents(current_user: dict = Depends(get_current_user)):
                                 {"$set": {"hash": torrent_hash}}
                             )
                             torrent["hash"] = torrent_hash
-                            logger.info(f"Hash synchronisé pour: {torrent['name']}")
+                            logger.info(f"Hash synchronisé pour: {torrent['name']} -> {torrent_hash}")
                             break
                 
                 if torrent_hash and torrent_hash in qbit_torrents:
