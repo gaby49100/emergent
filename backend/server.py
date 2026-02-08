@@ -1069,12 +1069,14 @@ async def get_my_torrents(current_user: dict = Depends(get_current_user)):
         import re
         # Convertir en minuscules
         name = name.lower()
-        # Remplacer les séparateurs courants par des espaces
-        name = re.sub(r'[._\-\[\]\(\)]', ' ', name)
-        # Supprimer les extensions de fichiers
-        name = re.sub(r'\.(mp4|mkv|avi|torrent)$', '', name)
-        # Supprimer les mots courants de release
-        name = re.sub(r'\b(french|vostfr|webrip|hdtv|x264|x265|h264|h265|1080p|720p|480p)\b', '', name)
+        # Remplacer tous les séparateurs et ponctuation par des espaces
+        name = re.sub(r'[._\-\[\]\(\):,\'\"!]', ' ', name)
+        # Supprimer les extensions de fichiers (n'importe où)
+        name = re.sub(r'\b(mp4|mkv|avi|torrent|flac|mp3|wav)\b', '', name)
+        # Supprimer les mots courants de release et qualité
+        name = re.sub(r'\b(french|vostfr|vf|vo|webrip|hdtv|bluray|bdrip|dvdrip|x264|x265|h264|h265|aac|ac3|dts|1080p|720p|480p|2160p|4k|hdr|web|dl)\b', '', name)
+        # Supprimer les années (4 chiffres)
+        name = re.sub(r'\b(19|20)\d{2}\b', '', name)
         # Normaliser les espaces multiples
         name = re.sub(r'\s+', ' ', name).strip()
         return name
@@ -1100,7 +1102,8 @@ async def get_my_torrents(current_user: dict = Depends(get_current_user)):
             title_match = re.match(r'^(.+?)\s*s\d+e\d+', norm_db)
             if title_match:
                 title = title_match.group(1).strip()
-                if len(title) >= 5 and title in norm_qbit and season_ep[0] in norm_qbit:
+                # Vérifier que le titre (sans ponctuation) est dans le nom qBittorrent
+                if len(title) >= 3 and title in norm_qbit and season_ep[0] in norm_qbit:
                     return True
         
         return False
@@ -1179,12 +1182,14 @@ async def get_all_torrents(current_user: dict = Depends(get_current_user)):
         import re
         # Convertir en minuscules
         name = name.lower()
-        # Remplacer les séparateurs courants par des espaces
-        name = re.sub(r'[._\-\[\]\(\)]', ' ', name)
-        # Supprimer les extensions de fichiers
-        name = re.sub(r'\.(mp4|mkv|avi|torrent)$', '', name)
-        # Supprimer les mots courants de release
-        name = re.sub(r'\b(french|vostfr|webrip|hdtv|x264|x265|h264|h265|1080p|720p|480p)\b', '', name)
+        # Remplacer tous les séparateurs et ponctuation par des espaces
+        name = re.sub(r'[._\-\[\]\(\):,\'\"!]', ' ', name)
+        # Supprimer les extensions de fichiers (n'importe où)
+        name = re.sub(r'\b(mp4|mkv|avi|torrent|flac|mp3|wav)\b', '', name)
+        # Supprimer les mots courants de release et qualité
+        name = re.sub(r'\b(french|vostfr|vf|vo|webrip|hdtv|bluray|bdrip|dvdrip|x264|x265|h264|h265|aac|ac3|dts|1080p|720p|480p|2160p|4k|hdr|web|dl)\b', '', name)
+        # Supprimer les années (4 chiffres)
+        name = re.sub(r'\b(19|20)\d{2}\b', '', name)
         # Normaliser les espaces multiples
         name = re.sub(r'\s+', ' ', name).strip()
         return name
@@ -1210,7 +1215,8 @@ async def get_all_torrents(current_user: dict = Depends(get_current_user)):
             title_match = re.match(r'^(.+?)\s*s\d+e\d+', norm_db)
             if title_match:
                 title = title_match.group(1).strip()
-                if len(title) >= 5 and title in norm_qbit and season_ep[0] in norm_qbit:
+                # Vérifier que le titre (sans ponctuation) est dans le nom qBittorrent
+                if len(title) >= 3 and title in norm_qbit and season_ep[0] in norm_qbit:
                     return True
         
         return False
