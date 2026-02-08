@@ -300,17 +300,18 @@ def generate_signed_url(base_url: str, file_path: str, secret_key: str, expiry_h
     import base64
     from urllib.parse import quote
     
-    # Chemin encodé pour l'URL
-    encoded_path = quote(file_path, safe='/')
+    # IMPORTANT: Nginx $uri utilise le chemin DÉCODÉ pour calculer le hash
+    # Mais l'URL doit contenir le chemin ENCODÉ
     
-    # String à signer: path + secret (sans expiration)
-    string_to_sign = f"{encoded_path} {secret_key}"
+    # String à signer: path DÉCODÉ + espace + secret (comme nginx $uri)
+    string_to_sign = f"{file_path} {secret_key}"
     
     # MD5 hash en base64 URL-safe
     md5_hash = hashlib.md5(string_to_sign.encode()).digest()
     signature = base64.urlsafe_b64encode(md5_hash).decode().rstrip('=')
     
-    # URL finale (sans expires)
+    # URL finale avec chemin ENCODÉ
+    encoded_path = quote(file_path, safe='/')
     url = f"{base_url}{encoded_path}?md5={signature}"
     
     return url, "never"
