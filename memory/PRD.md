@@ -139,8 +139,8 @@ GET  /api/admin/stats
 - [x] **Correction synchronisation hash torrents** - Le hash est maintenant récupéré lors de l'ajout via magnet et fichier .torrent
 - [x] **Amélioration correspondance noms torrents** - Normalisation intelligente pour synchroniser les anciens torrents sans hash
 
-### P1 - Important (EN ATTENTE)
-- [ ] **Téléchargements sécurisés** - Backend implémenté, nécessite configuration Nginx côté utilisateur
+### P1 - Important
+- [x] **Téléchargements sécurisés** - URLs signées fonctionnelles (corrigé 2026-02-08)
 - [ ] Application des limites de vitesse par groupe
 - [ ] Historique des actions admin
 
